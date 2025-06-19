@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixiJS v8 基本示例</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>PixiJS v8 基本示例</h1>
+        <div class="tips">
+            <p>💡 操作提示：鼠标拖拽移动视窗 | 滚轮缩放 | 快捷键：0键重置视窗，+/-缩放，Ctrl+R重置</p>
+        </div>
+        <div id="pixi-container"></div>
+        <div class="controls">
+            <button id="rotate-btn">旋转精灵</button>
+            <button id="color-btn">改变颜色</button>
+            <button id="center-btn">确认中心</button>
+            <button id="zoom-in-btn">放大</button>
+            <button id="zoom-out-btn">缩小</button>
+            <button id="viewport-reset-btn">重置视窗</button>
+            <button id="reset-btn">重置</button>
+        </div>
+    </div>
+
+    <!-- 引入 PixiJS v8 -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.0.0/dist/pixi.min.js"></script>
+    <!-- 引入主要的 JavaScript 文件 -->
+    <script src="main.js"></script>
+</body>
+</html> 
