@@ -1,0 +1,9 @@
+// 这是原来的main.js文件的备份
+// 新的模块化版本在index.js中
+// 如果需要回退到原版本，请：
+// 1. 删除新的模块文件夹（core/, graphics/, controls/, events/, ui/）
+// 2. 将此文件重命名为main.js
+// 3. 修改index.html中的script src为"main.js"
+
+// 原main.js内容保存在这里，但为了避免混淆，内容已被注释
+// 实际内容请参考git历史记录或从原始文件恢复 
