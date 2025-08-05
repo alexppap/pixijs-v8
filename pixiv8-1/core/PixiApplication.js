@@ -6,10 +6,11 @@
 import { APP_CONFIG } from '../utils/constants.js';
 
 export class PixiApplication {
-  constructor(containerId = 'pixi-container') {
+  constructor(containerId = 'pixi-container', autoStart = false) {
     this.app = null;
     this.containerId = containerId;
     this.container = null;
+    this.autoStart = autoStart;
   }
 
   /**
@@ -37,7 +38,8 @@ export class PixiApplication {
       backgroundColor: APP_CONFIG.DEFAULT_BACKGROUND_COLOR,
       antialias: APP_CONFIG.ANTIALIAS,
       resolution: window.devicePixelRatio || 1,
-      autoDensity: true
+      autoDensity: true,
+      autoStart: this.autoStart
     });
 
     // 将 canvas 添加到 DOM
@@ -47,6 +49,7 @@ export class PixiApplication {
     this.setupCanvasStyle();
 
     console.log(`PixiJS应用初始化完成: ${containerWidth} x ${containerHeight}`);
+    this.app.renderer.render(this.app.stage);
     return this.app;
   }
 

@@ -22,7 +22,7 @@ export class PixiTool {
     // 核心模块
     this.pixiApp = null;
     this.stateManager = null;
-    
+    this.autoStart = true;
     // 功能模块
     this.graphicsFactory = null;
     this.animationController = null;
@@ -32,6 +32,7 @@ export class PixiTool {
     
     // 初始化状态
     this.isInitialized = false;
+
   }
 
   /**
@@ -42,7 +43,7 @@ export class PixiTool {
       console.log('开始初始化PixiJS工具...');
       
       // 1. 初始化核心应用
-      this.pixiApp = new PixiApplication(this.containerId);
+      this.pixiApp = new PixiApplication(this.containerId, this.autoStart);
       const app = await this.pixiApp.init();
       
       // 2. 初始化状态管理器
