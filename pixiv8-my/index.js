@@ -4,17 +4,17 @@ import { StateManager } from './core/StateManager.js';
 import { ViewportController } from './controls/ViewportController.js';
 
 export class PixiTool {
-  constructor(containerId = 'pixi-container') {
+  constructor({ pixiApp, stateManager, graphicsFactory, viewportController, containerId = 'pixi-container', autoStart = false }) {
     this.containerId = containerId;
-    // 核心模块
-    this.pixiApp = null;
-    this.autoStart = false;
-    // 功能模块
-    this.graphicsFactory = null;
+    this.autoStart = autoStart;
+    this.pixiApp = pixiApp;
+    this.stateManager = stateManager;
+    this.graphicsFactory = graphicsFactory;
+    this.viewportController = viewportController;
   }
 
   /**
-   * 初始化PixiJS工具
+   * 初始化PixiJS工具（保留，兼容老用法，但推荐用工厂函数）
    */
   async init() {
     try {
@@ -22,31 +22,20 @@ export class PixiTool {
       // 1. 初始化核心应用
       this.pixiApp = new PixiApplication(this.containerId, this.autoStart);
       const app = await this.pixiApp.init();
-      console.log(app, 'app');
-      
-
       // 2. 初始化状态管理器
       this.stateManager = new StateManager();
-
-
       // 3. 初始化工厂
       this.graphicsFactory = new FactoryRenderer(app);
       const factory = this.graphicsFactory.create();
       this.pixiApp.app.stage.addChild(factory);
-
       // 4. 初始化视窗控制器
-      this.viewportController = new ViewportController(app, this.pixiApp, this.stateManager);
-
-
-
+      this.viewportController = new ViewportController(app, this.stateManager);
       // 渲染应用
       if (!this.autoStart) {
         this.pixiApp.render();
       }
-
       // 返回工具实例，便于链式调用
       return this;
-
     } catch (error) {
       console.error('PixiJS工具初始化失败:', error);
       throw error;
@@ -91,43 +80,74 @@ export class PixiTool {
   }
 }
 
-// 自动初始化功能（如果在浏览器环境中直接运行）
+/**
+ * 工厂函数：创建并初始化 PixiTool 实例
+ * 步骤：
+ * 1. 初始化核心应用（PixiApplication）
+ * 2. 初始化状态管理器（StateManager）
+ * 3. 初始化工厂渲染器（FactoryRenderer），并将工厂对象添加到舞台
+ * 4. 初始化视窗控制器（ViewportController）
+ *
+ * @param {string} containerId - PixiJS 容器ID
+ * @param {boolean} autoStart - 是否自动启动渲染
+ * @returns {Promise<PixiTool>} - 初始化完成的 PixiTool 实例
+ */
+export async function createPixiTool(containerId = 'pixi-container', autoStart = false) {
+  // 1. 初始化核心应用
+  const pixiApp = new PixiApplication(containerId, autoStart);
+  const app = await pixiApp.init();
+  // 2. 初始化状态管理器
+  const stateManager = new StateManager();
+  // 3. 初始化工厂渲染器，并添加到舞台
+  const graphicsFactory = new FactoryRenderer(app);
+  const factory = graphicsFactory.create();
+  app.stage.addChild(factory);
+  // 渲染应用
+  if (!autoStart) {
+    pixiApp.render();
+  }
+  // 4. 初始化视窗控制器
+  const viewportController = new ViewportController(app, stateManager);
+  // 组装 PixiTool 实例
+  return new PixiTool({
+    pixiApp,
+    stateManager,
+    graphicsFactory,
+    viewportController,
+    containerId,
+    autoStart
+  });
+}
+
+// 3. 自动初始化部分调用工厂函数
 if (typeof window !== 'undefined') {
   // 等待DOM加载完成
   const initializePixiTool = async () => {
     // 检查环境兼容性
     const compatibility = PixiTool.checkCompatibility();
-
     if (!compatibility.compatible) {
       console.error('环境不兼容:', compatibility.recommendations);
       alert(`环境不兼容: ${compatibility.recommendations.join(', ')}`);
       return;
     }
-
     // 检查 PixiJS 是否已加载
     if (typeof PIXI === 'undefined') {
       console.error('PixiJS 加载失败！');
       alert('PixiJS 加载失败，请检查网络连接！');
       return;
     }
-
     try {
       console.log('PixiJS v8 已成功加载！');
       console.log('版本信息:', PixiTool.getVersion());
-
-      const pixiTool = new PixiTool();
-      await pixiTool.init();
-
+      const pixiTool = await createPixiTool();
       // 将实例暴露到全局，便于调试和外部访问
       window.pixiTool = pixiTool;
-
       console.log('工具已挂载到 window.pixiTool，您可以在控制台中使用它');
     } catch (error) {
       console.error('初始化失败:', error);
       alert('初始化失败: ' + error.message);
     }
   };
-
   // DOM加载完成后初始化
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializePixiTool);

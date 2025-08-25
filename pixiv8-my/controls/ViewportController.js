@@ -6,10 +6,9 @@
 import { VIEWPORT_CONFIG, APP_CONFIG } from '../utils/constants.js';
 
 export class ViewportController {
-  constructor(app, pixiApp, stateManager) {
+  constructor(app, stateManager) {
     this.app = app;
     this.stateManager = stateManager;
-    this.pixiApp = pixiApp;
     
     // 初始化视窗状态
     this.initViewport();
@@ -121,8 +120,8 @@ export class ViewportController {
     
     this.stateManager.updateViewport(newViewport);
     this.updateViewport();
-    if(!this.pixiApp.autoStart) {
-      this.pixiApp.render();
+    if(!this.app.autoStart) {
+      this.app.render();
     }
   }
 
@@ -131,8 +130,8 @@ export class ViewportController {
    * @param {PointerEvent} event - 指针事件
    */
   handlePointerDown(event) {
-    if(!this.pixiApp.autoStart) {
-      this.pixiApp.start();
+    if(!this.app.autoStart) {
+      this.app.start();
     }
     // 只处理在canvas上的点击
     const rect = this.app.canvas.getBoundingClientRect();
@@ -190,8 +189,8 @@ export class ViewportController {
     // 恢复鼠标样式
     this.app.canvas.style.cursor = APP_CONFIG.CURSOR_GRAB;
 
-    if(!this.pixiApp.autoStart) {
-      this.pixiApp.stop();
+    if(!this.app.autoStart) {
+      this.app.stop();
     }
   }
 
