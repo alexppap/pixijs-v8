@@ -229,6 +229,9 @@ export class ViewportController {
     
     this.stateManager.updateViewport(newViewport);
     this.updateViewport();
+    if (!this.app.autoStart) {
+      this.app.render();
+    }
   }
 
   /**
@@ -255,6 +258,9 @@ export class ViewportController {
     
     this.stateManager.updateViewport(newViewport);
     this.updateViewport();
+    if (!this.app.autoStart) {
+      this.app.render();
+    }
   }
 
   /**
@@ -267,6 +273,9 @@ export class ViewportController {
       scale: VIEWPORT_CONFIG.DEFAULT_SCALE
     });
     this.updateViewport();
+    if (!this.app.autoStart) {
+      this.app.render();
+    }
     console.log('视窗已重置');
   }
 
@@ -284,6 +293,9 @@ export class ViewportController {
     
     this.stateManager.updateViewport(newViewport);
     this.updateViewport();
+    if (!this.app.autoStart) {
+      this.app.render();
+    }
   }
 
   /**
@@ -312,6 +324,9 @@ export class ViewportController {
     
     this.stateManager.updateViewport(newViewport);
     this.updateViewport();
+    if (!this.app.autoStart) {
+      this.app.render();
+    }
   }
 
   /**
@@ -344,6 +359,9 @@ export class ViewportController {
     
     this.stateManager.updateViewport(newViewport);
     this.updateViewport();
+    if (!this.app.autoStart) {
+      this.app.render();
+    }
   }
 
   /**

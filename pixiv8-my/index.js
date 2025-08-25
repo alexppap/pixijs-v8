@@ -143,6 +143,20 @@ if (typeof window !== 'undefined') {
       // 将实例暴露到全局，便于调试和外部访问
       window.pixiTool = pixiTool;
       console.log('工具已挂载到 window.pixiTool，您可以在控制台中使用它');
+      
+      // 添加重置视窗按钮的事件监听器
+      const resetBtn = document.getElementById('viewport-reset-btn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          pixiTool.viewportController.reset();
+          if (!pixiTool.pixiApp.autoStart) {
+            pixiTool.pixiApp.render();
+          }
+        });
+        console.log('重置视窗按钮事件监听器已添加');
+      } else {
+        console.warn('未找到重置视窗按钮元素');
+      }
     } catch (error) {
       console.error('初始化失败:', error);
       alert('初始化失败: ' + error.message);
