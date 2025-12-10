@@ -11,32 +11,33 @@ export class StateManager {
       // 图形状态
       currentShape: null,        // 当前显示的图形 ('polygon' | 'factory')
       currentGraphic: null,      // 当前的图形对象
-      
+      factoryGraphic: null,      // 厂区图形对象引用
+
       // 动画状态
       isRotating: false,
-      
+
       // 颜色状态
       currentColor: COLORS[0],
       colorIndex: 0,
-      
+
       // 中心点状态
       showingCenter: false,
       showingGeometricCenter: false,
       centerDot: null,
       geometricCenterDot: null,
-      
+
       // 图形数据
       polygonPoints: [...GRAPHICS_CONFIG.DEFAULT_POLYGON_POINTS],
       factoryPoints: [...GRAPHICS_CONFIG.FACTORY_POINTS],
       pbsGraphics: [],
-      
+
       // 视窗状态
       viewport: {
         x: 0,
         y: 0,
         scale: 1
       },
-      
+
       // 交互状态
       isDragging: false,
       lastPointerPosition: { x: 0, y: 0 },
@@ -45,7 +46,7 @@ export class StateManager {
       pbsMoveable: false,
       draggingPBS: null
     };
-    
+
     this.subscribers = [];
   }
 
@@ -222,6 +223,14 @@ export class StateManager {
   }
 
   /**
+   * 设置厂区图形引用
+   * @param {PIXI.Graphics} graphic - 厂区图形对象
+   */
+  setFactoryGraphic(graphic) {
+    this.setState({ factoryGraphic: graphic });
+  }
+
+  /**
    * 重置所有状态
    */
   reset() {
@@ -240,7 +249,8 @@ export class StateManager {
       isDragging: false,
       lastPointerPosition: { x: 0, y: 0 },
       pbsMoveable: false,
-      draggingPBS: null
+      draggingPBS: null,
+      factoryGraphic: null
     });
   }
 } 

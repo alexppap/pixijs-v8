@@ -106,6 +106,8 @@ export async function createPixiTool(containerId = 'pixi-container', autoStart =
   const graphicsFactory = new FactoryRenderer(app);
   const factory = graphicsFactory.create();
   app.stage.addChild(factory);
+  // 设置厂区图形引用到StateManager，消除硬编码假设
+  stateManager.setFactoryGraphic(factory);
   // 渲染应用
   if (!autoStart) {
     pixiApp.render();

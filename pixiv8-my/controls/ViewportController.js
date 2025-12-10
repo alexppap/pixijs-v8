@@ -486,9 +486,8 @@ export class ViewportController {
     const worldX = (canvasX - viewport.x) / viewport.scale;
     const worldY = (canvasY - viewport.y) / viewport.scale;
 
-    // 遍历舞台查找PBS单元
-    // 假设PBS单元在厂区容器内
-    const factory = this.app.stage.children[0]; // 第一个子元素应该是厂区
+    // 通过StateManager获取厂区图形引用，消除硬编码假设
+    const factory = this.stateManager.get('factoryGraphic');
     if (!factory || !factory.children) return null;
 
     // 创建世界坐标点
@@ -498,9 +497,8 @@ export class ViewportController {
     for (let i = factory.children.length - 1; i >= 0; i--) {
       const child = factory.children[i];
 
-      // 检查是否是PBS单元(可以通过名称或其他属性判断)
-      // 这里假设PBS单元都是Graphics对象且比较小
-      if (child instanceof PIXI.Graphics) {
+      // 使用isPBS属性精准识别PBS单元,避免误触其他Graphics
+      if (child.isPBS) {
         // 使用 containsPoint 方法进行精确的点检测
         // 需要先将世界坐标转换为PBS单元的本地坐标
         const localPoint = child.toLocal(worldPoint, this.app.stage);

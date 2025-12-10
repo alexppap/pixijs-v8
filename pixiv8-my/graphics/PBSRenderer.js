@@ -17,9 +17,14 @@ export class PBSRenderer {
    */
   createUnit(pbsData) {
     const { x, y, color, shape, size } = pbsData;
-    
+
     const pbsGraphic = new PIXI.Graphics();
-    
+
+    // 添加PBS标识属性，用于精准识别
+    pbsGraphic.isPBS = true;
+    // 保存PBS元数据，便于后续使用
+    pbsGraphic.pbsData = { color, shape, size };
+
     // 根据形状类型绘制
     if (shape === 'circle') {
       pbsGraphic.circle(0, 0, size);
@@ -29,14 +34,14 @@ export class PBSRenderer {
       // 默认绘制圆形
       pbsGraphic.circle(0, 0, size);
     }
-    
+
     // 应用填充色
     pbsGraphic.fill(color);
-    
+
     // 设置位置
     pbsGraphic.x = x;
     pbsGraphic.y = y;
-    
+
     return pbsGraphic;
   }
 
