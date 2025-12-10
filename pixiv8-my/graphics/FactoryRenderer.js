@@ -8,9 +8,15 @@ import { GRAPHICS_CONFIG, APP_CONFIG } from '../utils/constants.js';
 import { PBSRenderer } from './PBSRenderer.js';
 
 export class FactoryRenderer {
-  constructor(app) {
+  /**
+   * 构造函数
+   * @param {Object} app - PixiJS应用实例
+   * @param {PBSRenderer} pbsRenderer - PBS渲染器实例（可选，支持依赖注入）
+   */
+  constructor(app, pbsRenderer = null) {
     this.app = app;
-    this.pbsRenderer = new PBSRenderer(app);
+    // 支持依赖注入，提供默认值
+    this.pbsRenderer = pbsRenderer || new PBSRenderer(app);
   }
 
   /**

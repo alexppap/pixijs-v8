@@ -25,6 +25,7 @@ export class PixiTool {
       // 2. 初始化状态管理器
       this.stateManager = new StateManager();
       // 3. 初始化工厂
+      // 注意:FactoryRenderer 支持依赖注入 PBSRenderer
       this.graphicsFactory = new FactoryRenderer(app);
       const factory = this.graphicsFactory.create();
       this.pixiApp.app.stage.addChild(factory);
@@ -99,6 +100,9 @@ export async function createPixiTool(containerId = 'pixi-container', autoStart =
   // 2. 初始化状态管理器
   const stateManager = new StateManager();
   // 3. 初始化工厂渲染器，并添加到舞台
+  // 注意:FactoryRenderer 支持依赖注入 PBSRenderer
+  // 默认用法:const graphicsFactory = new FactoryRenderer(app);
+  // 自定义用法:const graphicsFactory = new FactoryRenderer(app, customPBSRenderer);
   const graphicsFactory = new FactoryRenderer(app);
   const factory = graphicsFactory.create();
   app.stage.addChild(factory);
