@@ -50,7 +50,27 @@ export const GRAPHICS_CONFIG = {
     { x: 100, y: 100, color: 0x00ff00, shape: 'circle', size: 5 },
     { x: 20, y: 70, color: 0xffff00, shape: 'rect', size: 8 },
     { x: 120, y: 130, color: 0x00ffff, shape: 'circle', size: 6 },
-    { x: 175, y: 60, color: 0xff00ff, shape: 'rect', size: 7 }
+    { x: 175, y: 60, color: 0xff00ff, shape: 'rect', size: 7 },
+    // 不规则多边形示例（五角星形状）
+    {
+      x: 80,
+      y: 80,
+      color: 0xff6600,
+      shape: 'polygon',
+      size: 12,
+      points: [
+        { x: 0, y: -12 },      // 顶部
+        { x: 3.5, y: -4 },     // 右上内
+        { x: 11.5, y: -3.7 },  // 右上外
+        { x: 5.5, y: 3 },      // 右侧内
+        { x: 7.4, y: 10.8 },   // 右下外
+        { x: 0, y: 6 },        // 下侧内
+        { x: -7.4, y: 10.8 },  // 左下外
+        { x: -5.5, y: 3 },     // 左侧内
+        { x: -11.5, y: -3.7 }, // 左上外
+        { x: -3.5, y: -4 }     // 左上内
+      ]
+    }
   ],
   
   // 中心点配置
