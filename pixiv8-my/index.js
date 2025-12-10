@@ -157,6 +157,25 @@ if (typeof window !== 'undefined') {
       } else {
         console.warn('未找到重置视窗按钮元素');
       }
+
+      // 添加PBS移动切换按钮的事件监听器
+      const pbsMoveableToggleBtn = document.getElementById('pbs-moveable-toggle-btn');
+      if (pbsMoveableToggleBtn) {
+        pbsMoveableToggleBtn.addEventListener('click', () => {
+          const isEnabled = pixiTool.stateManager.togglePBSMoveable();
+          pbsMoveableToggleBtn.textContent = isEnabled ? '禁用PBS移动' : '启用PBS移动';
+          pbsMoveableToggleBtn.style.backgroundColor = isEnabled ? '#dc3545' : '#007bff';
+
+          // 更新canvas鼠标样式
+          const canvas = pixiTool.pixiApp.app.canvas;
+          if (canvas) {
+            canvas.style.cursor = isEnabled ? 'pointer' : 'grab';
+          }
+        });
+        console.log('PBS移动切换按钮事件监听器已添加');
+      } else {
+        console.warn('未找到PBS移动切换按钮元素');
+      }
     } catch (error) {
       console.error('初始化失败:', error);
       alert('初始化失败: ' + error.message);

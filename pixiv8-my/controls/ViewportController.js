@@ -137,17 +137,41 @@ export class ViewportController {
     const rect = this.app.canvas.getBoundingClientRect();
     const isOnCanvas = event.clientX >= rect.left && event.clientX <= rect.right &&
                       event.clientY >= rect.top && event.clientY <= rect.bottom;
-    
+
     if (!isOnCanvas) return;
-    
+
+    const state = this.stateManager.getState();
+
+    // 检查是否启用PBS移动模式
+    if (state.pbsMoveable) {
+      const pbsUnit = this.getPBSAtPoint(event);
+      if (pbsUnit) {
+        // 找到PBS单元,进入PBS拖拽模式
+        this.stateManager.setDraggingPBS(pbsUnit);
+        this.stateManager.setDragging(false);
+
+        // 记录起始位置
+        this.stateManager.set('lastPointerPosition', {
+          x: event.clientX,
+          y: event.clientY
+        });
+
+        // 改变鼠标样式
+        this.app.canvas.style.cursor = 'move';
+        event.preventDefault();
+        return;
+      }
+    }
+
+    // 正常的视窗拖拽
     this.stateManager.setDragging(true, {
       x: event.clientX,
       y: event.clientY
     });
-    
+
     // 改变鼠标样式
     this.app.canvas.style.cursor = APP_CONFIG.CURSOR_GRABBING;
-    
+
     // 阻止默认行为
     event.preventDefault();
   }
@@ -158,25 +182,78 @@ export class ViewportController {
    */
   handlePointerMove(event) {
     const state = this.stateManager.getState();
-    if (!state.isDragging) return;
-    
-    // 计算移动距离
-    const deltaX = event.clientX - state.lastPointerPosition.x;
-    const deltaY = event.clientY - state.lastPointerPosition.y;
-    
-    // 更新视窗位置
-    const newViewport = {
-      x: state.viewport.x + deltaX,
-      y: state.viewport.y + deltaY
-    };
-    
-    this.stateManager.updateViewport(newViewport);
-    this.stateManager.setDragging(true, {
-      x: event.clientX,
-      y: event.clientY
-    });
-    
-    this.updateViewport();
+
+    // 优先处理PBS拖拽
+    if (state.draggingPBS) {
+      // 获取canvas坐标
+      const rect = this.app.canvas.getBoundingClientRect();
+      const scaleX = this.app.canvas.width / rect.width;
+      const scaleY = this.app.canvas.height / rect.height;
+
+      const canvasX = (event.clientX - rect.left) * scaleX;
+      const canvasY = (event.clientY - rect.top) * scaleY;
+
+      // 转换为世界坐标(考虑视窗变换)
+      const viewport = state.viewport;
+      const worldX = (canvasX - viewport.x) / viewport.scale;
+      const worldY = (canvasY - viewport.y) / viewport.scale;
+
+      // 获取PBS的父容器(厂区)
+      const parent = state.draggingPBS.parent;
+      if (parent) {
+        // 将世界坐标转换为父容器的本地坐标
+        const localPos = parent.toLocal(new PIXI.Point(worldX, worldY), this.app.stage);
+
+        // 更新PBS位置
+        state.draggingPBS.x = localPos.x;
+        state.draggingPBS.y = localPos.y;
+      }
+
+      // 更新指针位置
+      this.stateManager.set('lastPointerPosition', {
+        x: event.clientX,
+        y: event.clientY
+      });
+
+      if (!this.app.autoStart) {
+        this.app.render();
+      }
+      return;
+    }
+
+    // 正常的视窗拖拽
+    if (state.isDragging) {
+      // 计算移动距离
+      const deltaX = event.clientX - state.lastPointerPosition.x;
+      const deltaY = event.clientY - state.lastPointerPosition.y;
+
+      // 更新视窗位置
+      const newViewport = {
+        x: state.viewport.x + deltaX,
+        y: state.viewport.y + deltaY
+      };
+
+      this.stateManager.updateViewport(newViewport);
+      this.stateManager.setDragging(true, {
+        x: event.clientX,
+        y: event.clientY
+      });
+
+      this.updateViewport();
+      return;
+    }
+
+    // PBS移动模式下：检查鼠标是否悬停在PBS上，更新鼠标样式
+    if (state.pbsMoveable && !state.isDragging && !state.draggingPBS) {
+      const pbsUnit = this.getPBSAtPoint(event);
+      if (pbsUnit) {
+        // 鼠标在PBS上，显示移动光标
+        this.app.canvas.style.cursor = 'move';
+      } else {
+        // 鼠标不在PBS上，显示指针光标
+        this.app.canvas.style.cursor = 'pointer';
+      }
+    }
   }
 
   /**
@@ -184,10 +261,19 @@ export class ViewportController {
    * @param {PointerEvent} event - 指针事件
    */
   handlePointerUp(event) {
-    this.stateManager.setDragging(false);
-    
-    // 恢复鼠标样式
-    this.app.canvas.style.cursor = APP_CONFIG.CURSOR_GRAB;
+    const state = this.stateManager.getState();
+
+    // 清除PBS拖拽状态
+    if (state.draggingPBS) {
+      this.stateManager.setDraggingPBS(null);
+      // 在PBS移动模式下恢复为pointer样式
+      this.app.canvas.style.cursor = state.pbsMoveable ? 'pointer' : APP_CONFIG.CURSOR_GRAB;
+    } else {
+      // 清除视窗拖拽状态
+      this.stateManager.setDragging(false);
+      // 恢复鼠标样式
+      this.app.canvas.style.cursor = state.pbsMoveable ? 'pointer' : APP_CONFIG.CURSOR_GRAB;
+    }
 
     if(!this.app.autoStart) {
       this.app.stop();
@@ -377,5 +463,62 @@ export class ViewportController {
       canvasWidth: this.app.canvas.width,
       canvasHeight: this.app.canvas.height
     };
+  }
+
+  /**
+   * 获取鼠标位置处的PBS单元
+   * @param {PointerEvent} event - 指针事件
+   * @returns {PIXI.Graphics|null} PBS单元或null
+   */
+  getPBSAtPoint(event) {
+    if (!this.app || !this.app.stage) return null;
+
+    // 获取canvas坐标
+    const rect = this.app.canvas.getBoundingClientRect();
+    const scaleX = this.app.canvas.width / rect.width;
+    const scaleY = this.app.canvas.height / rect.height;
+
+    const canvasX = (event.clientX - rect.left) * scaleX;
+    const canvasY = (event.clientY - rect.top) * scaleY;
+
+    // 转换为世界坐标(考虑视窗变换)
+    const viewport = this.stateManager.get('viewport');
+    const worldX = (canvasX - viewport.x) / viewport.scale;
+    const worldY = (canvasY - viewport.y) / viewport.scale;
+
+    // 遍历舞台查找PBS单元
+    // 假设PBS单元在厂区容器内
+    const factory = this.app.stage.children[0]; // 第一个子元素应该是厂区
+    if (!factory || !factory.children) return null;
+
+    // 创建世界坐标点
+    const worldPoint = new PIXI.Point(worldX, worldY);
+
+    // 从后往前遍历(优先选择上层的PBS)
+    for (let i = factory.children.length - 1; i >= 0; i--) {
+      const child = factory.children[i];
+
+      // 检查是否是PBS单元(可以通过名称或其他属性判断)
+      // 这里假设PBS单元都是Graphics对象且比较小
+      if (child instanceof PIXI.Graphics) {
+        // 使用 containsPoint 方法进行精确的点检测
+        // 需要先将世界坐标转换为PBS单元的本地坐标
+        const localPoint = child.toLocal(worldPoint, this.app.stage);
+
+        // 使用 PixiJS 内置的边界检测
+        // 获取本地边界（不含变换）
+        const localBounds = child.getLocalBounds();
+
+        // 检查点是否在本地边界内
+        if (localPoint.x >= localBounds.x &&
+            localPoint.x <= localBounds.x + localBounds.width &&
+            localPoint.y >= localBounds.y &&
+            localPoint.y <= localBounds.y + localBounds.height) {
+          return child;
+        }
+      }
+    }
+
+    return null;
   }
 } 

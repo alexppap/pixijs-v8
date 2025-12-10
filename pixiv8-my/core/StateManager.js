@@ -39,7 +39,11 @@ export class StateManager {
       
       // 交互状态
       isDragging: false,
-      lastPointerPosition: { x: 0, y: 0 }
+      lastPointerPosition: { x: 0, y: 0 },
+
+      // PBS移动状态
+      pbsMoveable: false,
+      draggingPBS: null
     };
     
     this.subscribers = [];
@@ -199,6 +203,25 @@ export class StateManager {
   }
 
   /**
+   * 切换PBS可移动状态
+   * @returns {boolean} 新的PBS可移动状态
+   */
+  togglePBSMoveable() {
+    const newState = !this.state.pbsMoveable;
+    this.setState({ pbsMoveable: newState });
+    console.log(`PBS移动模式: ${newState ? '已启用' : '已禁用'}`);
+    return newState;
+  }
+
+  /**
+   * 设置正在拖拽的PBS单元
+   * @param {PIXI.Graphics} pbsUnit - PBS单元对象
+   */
+  setDraggingPBS(pbsUnit) {
+    this.setState({ draggingPBS: pbsUnit });
+  }
+
+  /**
    * 重置所有状态
    */
   reset() {
@@ -215,7 +238,9 @@ export class StateManager {
       pbsGraphics: [],
       viewport: { x: 0, y: 0, scale: 1 },
       isDragging: false,
-      lastPointerPosition: { x: 0, y: 0 }
+      lastPointerPosition: { x: 0, y: 0 },
+      pbsMoveable: false,
+      draggingPBS: null
     });
   }
 } 
