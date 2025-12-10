@@ -1,0 +1,13 @@
+{
+  "name": "pixijs-v8-demo",
+  "version": "1.0.0",
+  "description": "PixiJS v8 模块化图形工具",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve . -p 8000",
+    "start": "npx serve . -p 8000"
+  },
+  "keywords": ["pixijs", "graphics"],
+  "author": "",
+  "license": "MIT"
+}
