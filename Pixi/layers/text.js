@@ -17,7 +17,7 @@
  */
 import { Text, Container, DEG_TO_RAD } from "pixi.js";
 import {
-  lngLatToMercator,
+  lngLatToMapPixel,
   findPolyVisualCenter,
   createPolygonGraphic,
 } from "../utils/mapUtils";
@@ -77,16 +77,20 @@ const destroyTextInstances = (textInstances) => {
 
 /**
  * 计算地图坐标到像素坐标的转换
- * @param {number[]} centerPoint 中心点坐标 [lat, lng]（源码传参顺序）
+ * 注：centerPoint 来自 findPolyVisualCenter，形如 [x, y]；原实现按
+ * lngLatToMercator(centerPoint[1], centerPoint[0]) 调用，等价于
+ * lngLatToMapPixel 的 { lng: centerPoint[0], lat: centerPoint[1] }
+ * @param {number[]} centerPoint 中心点坐标（源码传参顺序）
  * @param {object} mapInfo 地图信息（Origin）
  * @returns {object} 像素坐标 {x, y}
  */
 const calculatePosition = (centerPoint, mapInfo) => {
-  const picCenter = lngLatToMercator(centerPoint[1], centerPoint[0]);
-  return {
-    x: picCenter[0] - (mapInfo.Origin?.X || 0),
-    y: -(picCenter[1] + (mapInfo.Origin?.Y || 0)),
-  };
+  const [x, y] = lngLatToMapPixel({
+    lng: centerPoint[0],
+    lat: centerPoint[1],
+    mapInfo,
+  });
+  return { x, y };
 };
 
 /**
@@ -171,9 +175,16 @@ const calculateDialogPosition = (event, DialogData) => {
  * @param {object} DialogData 对话框数据
  */
 const adjustDialogVerticalPosition = (DialogData) => {
-  const dataArrLength =
-    DialogData.ClickedMapItems[0]?.DialogData.length ||
-    Object.keys(DialogData.ClickedMapItems[0]?.DialogData).length;
+  // 原实现 `items[0]?.DialogData.length || Object.keys(items[0]?.DialogData).length`
+  // 两个分支都会在 DialogData 缺失时抛错（?. 断链后仍访问 .length /
+  // Object.keys(undefined)）。此处显式取值并兜底 0。
+  const dialogPayload = DialogData.ClickedMapItems?.[0]?.DialogData;
+  let dataArrLength = 0;
+  if (Array.isArray(dialogPayload)) {
+    dataArrLength = dialogPayload.length;
+  } else if (dialogPayload && typeof dialogPayload === "object") {
+    dataArrLength = Object.keys(dialogPayload).length;
+  }
 
   if (DialogData.DialogY > LAYOUT_CONFIG.MAX_HEIGHT - LAYOUT_CONFIG.DIALOG_WIDTH) {
     DialogData.DialogY -=
@@ -202,16 +213,17 @@ export function drawFieldTexts({ props, mapInfo, mapContainer, Map, textState })
   props.FieldTextInfos.LayerLabelOverlayInfos?.forEach((item) => {
     const TextObj = new Text(item.Label, TEXT_STYLES.LABEL);
 
-    // 计算文本位置
-    const picCenter = lngLatToMercator(
-      Number(item.MapLocation.CenterY),
-      Number(item.MapLocation.CenterX)
-    );
+    // 计算文本位置（Origin 缺失按 0，避免 NaN 坐标导致文字静默不渲染）
+    const [labelX, labelY] = lngLatToMapPixel({
+      lng: Number(item.MapLocation.CenterX),
+      lat: Number(item.MapLocation.CenterY),
+      mapInfo,
+    });
 
     // 设置文本属性
     TextObj.anchor.set(0.5, 0.5);
-    TextObj.x = picCenter[0] - mapInfo.Origin?.X;
-    TextObj.y = -(picCenter[1] + mapInfo.Origin?.Y);
+    TextObj.x = labelX;
+    TextObj.y = labelY;
     TextObj.angle = item.MapLocation.Angle;
 
     textState.FieldTexts.push(TextObj);

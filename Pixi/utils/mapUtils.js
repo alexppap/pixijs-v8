@@ -31,9 +31,14 @@ import { Graphics, Sprite } from "pixi.js";
  * 将经纬度转换为墨卡托坐标
  * 源码依赖 proj4 全局投影定义（resetCoordinateSystem 中 defs）；本项目无
  * proj4 依赖，未加载时恒等返回（mock 数据直接给出目标坐标系坐标）。
- * @param {number} longitude 经度
- * @param {number} latitude 纬度
- * @returns {number[]} 转换后的坐标数组
+ *
+ * ⚠ 本项目的字段约定：地图数据中 **CenterY / 点位 Y 装经度，CenterX /
+ * 点位 X 装纬度**（反直觉但全库一致）。因此调用处形如
+ * `lngLatToMercator(item.CenterY, item.CenterX)`，返回值 [0] 作 x、[1] 作 y。
+ * 新增调用请走 lngLatToMapPixel，勿再自行拼装，以免与该约定错位。
+ * @param {number} longitude 经度（本项目取自 CenterY / 点位 Y）
+ * @param {number} latitude 纬度（本项目取自 CenterX / 点位 X）
+ * @returns {number[]} 转换后的坐标数组 [x, y]
  */
 export function lngLatToMercator(longitude, latitude) {
   const lon = Number(longitude);
@@ -69,6 +74,37 @@ export function lngLatToMercator(longitude, latitude) {
     console.error("Failed to convert coordinates", error);
     return [0, 0];
   }
+}
+
+/**
+ * 经纬度 → 地图像素坐标（唯一实现，原 router/ship/car 三份重复的
+ * convertLngLatToMapPixel 合并至此）
+ *
+ * Origin 缺失时按 0 处理：裸写 `picCenter[0] - mapInfo.Origin?.X` 在
+ * Origin 为 undefined 时得到 NaN，PIXI 对 NaN 坐标既不报错也不渲染，
+ * 元素会静默消失且极难定位，故此处统一防护。
+ *
+ * ⚠ 内部按 `lngLatToMercator(lat, lng)` 调用——形参名与实参顺序倒置，
+ * 这是移植自源码的既有约定（三份原实现均如此），刻意保持以免改变坐标
+ * 输出。故 picCenter[0] 实为 lat 位、[1] 为 lng 位。勿"顺手修正"顺序。
+ * @param {object} params 参数对象
+ * @param {number} params.lng 调用方标为经度的字段（实际取 CenterX / 点位 x）
+ * @param {number} params.lat 调用方标为纬度的字段（实际取 CenterY / 点位 y）
+ * @param {object} params.mapInfo 地图信息（Origin）
+ * @param {object} [params.offset] 附加偏移 {x, y}
+ * @returns {number[]} [x, y] 地图像素坐标
+ */
+export function lngLatToMapPixel({ lng, lat, mapInfo, offset = {} }) {
+  const picCenter = lngLatToMercator(lat, lng);
+  const originX = Number(mapInfo?.Origin?.X) || 0;
+  const originY = Number(mapInfo?.Origin?.Y) || 0;
+  const offsetX = Number(offset.x) || 0;
+  const offsetY = Number(offset.y) || 0;
+
+  return [
+    picCenter[0] - originX + offsetX,
+    -(picCenter[1] + originY + offsetY),
+  ];
 }
 
 // ===============================================

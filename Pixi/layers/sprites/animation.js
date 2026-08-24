@@ -117,6 +117,12 @@ export function clearSprites(spritesArray) {
     spritesArray.forEach((item) => {
       if (item && item.destroy && typeof item.destroy === "function") {
         try {
+          // 先停悬停效果（取消运行中的 rAF 并摘除 mouseover/mouseout），
+          // 否则动画帧回调会在容器销毁后继续访问已销毁对象
+          if (typeof item.__hoverEffect?.destroy === "function") {
+            item.__hoverEffect.destroy();
+            item.__hoverEffect = null;
+          }
           // 在销毁前移除所有事件监听器，避免交互系统继续引用
           item.removeAllListeners();
           // 标记为不可交互（v8：eventMode 还原为 pass-through）

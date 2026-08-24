@@ -17,6 +17,10 @@ export { createMapInteraction } from "./core/MapInteraction";
 export { createCoordinateSystem } from "./core/CoordinateSystem";
 export { createWebGLGuard } from "./core/WebGLGuard";
 export {
+  getOrCreateRenderTexture,
+  releaseRenderTextures,
+} from "./core/RenderTextureCache";
+export {
   loadAllTextures,
   initPositionSpritesheet,
   getTexture,

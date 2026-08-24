@@ -7,8 +7,6 @@
  *              MapTemplate.vue 清理链 2798–2808）。
  * Version: 1.0.0
  */
-import { reactive } from "vue";
-
 /**
  * 创建独立的底图图层状态对象
  * @returns {object} 状态对象（含 destroy），字段：
@@ -16,13 +14,23 @@ import { reactive } from "vue";
  *   fieldTextLst - 底图场地文字实例列表
  */
 export function createMapLayerState() {
+  // 池内是 PIXI 显示对象，不能用 reactive：深层代理会让 destroy() 收到
+  // Proxy，PIXI 内部 parent.children.indexOf(proxy) 返回 -1，对象被销毁却
+  // 仍留在容器 children 中，下一帧渲染即访问已销毁对象。
   const state = {
-    MapLayer: reactive([]), // 地图实例（每个组件独立）
-    fieldTextLst: reactive([]), // 场地文字实例（每个组件独立）
+    MapLayer: [], // 地图实例（每个组件独立）
+    fieldTextLst: [], // 场地文字实例（每个组件独立）
   };
 
   return {
-    ...state,
+    // 只读暴露：池引用不可被外部替换。`state.MapLayer = []` 会断开
+    // destroy 的闭包引用，使新数组内的对象永不销毁；清空请用 .length = 0
+    get MapLayer() {
+      return state.MapLayer;
+    },
+    get fieldTextLst() {
+      return state.fieldTextLst;
+    },
 
     /**
      * 销毁池内显示对象并清空数组

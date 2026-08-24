@@ -7,8 +7,6 @@
  *              MapTemplate.vue 清理链 2810–2818）。
  * Version: 1.0.0
  */
-import { reactive } from "vue";
-
 /**
  * 创建独立的文字状态对象
  * @returns {object} 文字状态对象（含 destroy），字段：
@@ -16,13 +14,20 @@ import { reactive } from "vue";
  *   FieldTexts - 场地文字实例列表
  */
 export function createTextState() {
+  // PIXI 显示对象不进入 Vue 响应式系统（见 mapLayerState 说明）
   const state = {
-    FieldTextsPIXI: reactive([]), // 场地文字 PIXI 实例（每个组件独立）
-    FieldTexts: reactive([]), // 场地文字实例（每个组件独立）
+    FieldTextsPIXI: [], // 场地文字 PIXI 实例（每个组件独立）
+    FieldTexts: [], // 场地文字实例（每个组件独立）
   };
 
   return {
-    ...state,
+    // 只读暴露：清空请用 .length = 0（见 mapLayerState 说明）
+    get FieldTextsPIXI() {
+      return state.FieldTextsPIXI;
+    },
+    get FieldTexts() {
+      return state.FieldTexts;
+    },
 
     /**
      * 销毁池内显示对象并清空数组

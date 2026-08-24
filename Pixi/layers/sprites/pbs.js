@@ -22,7 +22,11 @@
  */
 import { Graphics, RenderTexture } from "pixi.js";
 import {
-  lngLatToMercator,
+  getOrCreateRenderTexture,
+  releaseRenderTextures,
+} from "../../core/RenderTextureCache";
+import {
+  lngLatToMapPixel,
   calculateBounds,
   processPolygonVertices,
 } from "../../utils/mapUtils";
@@ -36,57 +40,53 @@ const PBS_CONFIG = {
 };
 
 /**
- * 网格纹理缓存（`${color}-${opacity}` → RenderTexture）。
- * 高亮切换等场景会频繁重建 PBS，若每次都新建 RenderTexture 而旧纹理
- * 不随 Graphics 销毁释放，会持续累积 GPU 内存；按颜色+透明度缓存复用
- * 可将总量收敛到有限几种组合。
+ * 网格纹理缓存说明：高亮切换等场景会频繁重建 PBS，若每次都新建
+ * RenderTexture 而旧纹理不随 Graphics 销毁释放，会持续累积 GPU 内存；
+ * 按颜色+透明度缓存复用可将总量收敛到有限几种组合。缓存实现与按
+ * renderer 分桶的生命周期管理见 core/RenderTextureCache。
  */
-const gridTextureCache = new Map();
 
 /**
- * 重置网格纹理缓存（仅供测试使用）
+ * 释放网格纹理缓存（由 PixiMap.destroy 统一调用；亦供测试重置）
+ * @param {object} [pixiMap] PixiMap 实例
  */
-export function resetGridTextureCache() {
-  gridTextureCache.clear();
+export function resetGridTextureCache(pixiMap) {
+  releaseRenderTextures(pixiMap);
 }
 
 /**
  * 创建图形纹理（网格线纹理，用于 PlanStatus===1 的 PBS 填充）
  * @param {number} color 网格线颜色
  * @param {number} opacity 透明度
- * @param {object} Map PixiMap 实例（renderer 用于渲染到纹理）
- * @returns {object} PIXI.RenderTexture
+ * @param {object} pixiMap PixiMap 实例（renderer 用于渲染到纹理）
+ * @returns {object|null} PIXI.RenderTexture（无 renderer 时为 null）
  */
-const generateGridTexture = (color, opacity, Map) => {
-  const cacheKey = `${color}-${opacity}`;
-  if (gridTextureCache.has(cacheKey)) {
-    return gridTextureCache.get(cacheKey);
-  }
+const generateGridTexture = (color, opacity, pixiMap) =>
+  getOrCreateRenderTexture(pixiMap, `${color}-${opacity}`, (renderer) => {
+    const gridGraphics = new Graphics();
+    const gridSize = PBS_CONFIG.GRID_TEXTURE.GRID_SIZE;
+    const textureSize = PBS_CONFIG.GRID_TEXTURE.TEXTURE_SIZE;
 
-  const gridGraphics = new Graphics();
-  const gridSize = PBS_CONFIG.GRID_TEXTURE.GRID_SIZE;
-  const textureSize = PBS_CONFIG.GRID_TEXTURE.TEXTURE_SIZE;
+    for (let i = 0; i <= textureSize; i += gridSize) {
+      gridGraphics.moveTo(i, 0);
+      gridGraphics.lineTo(i, textureSize);
+      gridGraphics.moveTo(0, i);
+      gridGraphics.lineTo(textureSize, i);
+    }
+    gridGraphics.stroke({ width: 1, color, alpha: opacity });
 
-  for (let i = 0; i <= textureSize; i += gridSize) {
-    gridGraphics.moveTo(i, 0);
-    gridGraphics.lineTo(i, textureSize);
-    gridGraphics.moveTo(0, i);
-    gridGraphics.lineTo(textureSize, i);
-  }
-  gridGraphics.stroke({ width: 1, color, alpha: opacity });
+    const renderTexture = RenderTexture.create({
+      width: textureSize,
+      height: textureSize,
+    });
 
-  const renderTexture = RenderTexture.create({
-    width: textureSize,
-    height: textureSize,
+    // v8：renderer.render 参数对象
+    renderer.render({ container: gridGraphics, target: renderTexture });
+    // 网格已烘焙进 RenderTexture，中间 Graphics 不再需要
+    gridGraphics.destroy();
+
+    return renderTexture;
   });
-
-  // v8：renderer.render 参数对象；兼容 PixiMap（app.renderer）与直接注入
-  const renderer = Map?.renderer || Map?.app?.renderer;
-  renderer?.render({ container: gridGraphics, target: renderTexture });
-
-  gridTextureCache.set(cacheKey, renderTexture);
-  return renderTexture;
-};
 
 /**
  * 创建PBS图形的函数（v8：poly/fill/stroke，边框覆盖语义对齐 lineStyle）
@@ -157,15 +157,16 @@ const createPBS = ({
     borderStyle = { width: 3, color: 0xdc143c, alpha: 1 };
   }
 
-  // 计算中心坐标
-  const picCenter = lngLatToMercator(
-    Number(item.CenterY),
-    Number(item.CenterX)
-  );
+  // 计算中心坐标（Origin 缺失按 0，避免 NaN 坐标导致 PBS 静默不渲染）
+  const [pbsX, pbsY] = lngLatToMapPixel({
+    lng: Number(item.CenterX),
+    lat: Number(item.CenterY),
+    mapInfo,
+  });
 
   // 设置位置和变换
-  PBS.x = picCenter[0] - mapInfo.Origin?.X;
-  PBS.y = -(picCenter[1] + mapInfo.Origin?.Y);
+  PBS.x = pbsX;
+  PBS.y = pbsY;
   PBS.angle = item.Angle;
   PBS.scale.x = mapInfo.Scale
     ? item.Mirror
@@ -178,10 +179,14 @@ const createPBS = ({
 
   // 构建多边形路径并填充（网格纹理或纯色）
   PBS.poly(polygonVertices);
-  if (item.PlanStatus === 1) {
-    const renderTexture = generateGridTexture(color, item.Transparency, Map);
-    PBS.fill({ texture: renderTexture });
+  const gridTexture =
+    item.PlanStatus === 1
+      ? generateGridTexture(color, item.Transparency, Map)
+      : null;
+  if (gridTexture) {
+    PBS.fill({ texture: gridTexture });
   } else {
+    // 无 renderer 导致网格纹理生成失败时降级为纯色，避免 fill(undefined)
     PBS.fill({ color, alpha: item.Transparency });
   }
 
@@ -237,9 +242,10 @@ export function drawPBSs({
   materialOnClick,
   spriteState,
 }) {
-  // 清空现有的PBSs图形
+  // 清空现有的PBSs图形（原地清空：赋新数组会断开 spriteState.destroy 的
+  // 闭包引用，导致新数组内的图形在组件卸载时永不销毁）
   spriteState.PBSs.forEach((item) => item.destroy());
-  spriteState.PBSs = [];
+  spriteState.PBSs.length = 0;
 
   // 过滤并处理每个PBS
   props.NowPBSs?.filter((it) => it?.MapPoints?.length)?.forEach((item) => {

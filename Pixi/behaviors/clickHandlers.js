@@ -424,13 +424,31 @@ export function createClickHandlers(ctx) {
   // ------------------------------
   // 场地 hover 链（源 825–953）
   // ------------------------------
+  /** hover 命中检测的待处理事件与 rAF 句柄（节流用） */
+  let pendingHoverEvent = null;
+  let hoverRafId = null;
+
   /**
    * 绑定鼠标移动事件（mousemove 链入口）
+   *
+   * 以 rAF 合并：handleFieldMouseMove 内部会对 MapLayer 全量做
+   * containsPoint 命中检测，底图上千个多边形时单次开销可观，而 mousemove
+   * 每秒可触发上百次。合并后每帧最多检测一次，只保留最新坐标。
+   * 注：节流只在此处，handleFieldMouseMove 本身保持同步（供直接调用/测试）。
    * @param {object} container 容器对象（PIXI.Container）
    */
   const bindMouseMoveEvent = (container) => {
     container.on("mousemove", (event) => {
-      handleFieldMouseMove(event);
+      // 事件对象在 v8 中会被复用，仅取所需坐标快照
+      pendingHoverEvent = { global: { x: event.global.x, y: event.global.y } };
+      if (hoverRafId !== null) return;
+
+      hoverRafId = requestAnimationFrame(() => {
+        hoverRafId = null;
+        const queued = pendingHoverEvent;
+        pendingHoverEvent = null;
+        if (queued) handleFieldMouseMove(queued);
+      });
     });
   };
 
@@ -501,9 +519,15 @@ export function createClickHandlers(ctx) {
   };
 
   /**
-   * 销毁（清理高亮边框列表与引用）
+   * 销毁（清理高亮边框列表与引用，取消挂起的 hover 检测）
    */
   const destroy = () => {
+    // 取消挂起的 rAF：否则卸载后回调仍会读 MapLayer / 写 DialogData
+    if (hoverRafId !== null) {
+      cancelAnimationFrame(hoverRafId);
+      hoverRafId = null;
+    }
+    pendingHoverEvent = null;
     clearBorderList(itemBorderLst);
     clickedMapItemBorder = null;
     states.dialogState.clearClickedMapItemBorder();

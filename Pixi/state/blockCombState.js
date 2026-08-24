@@ -7,8 +7,6 @@
  *              源 MapTemplate.vue 清理链 2798–2808）。
  * Version: 1.0.0
  */
-import { reactive } from "vue";
-
 /**
  * 创建独立的总段/预组状态对象
  * @returns {object} 状态对象（含 destroy），字段：
@@ -18,15 +16,28 @@ import { reactive } from "vue";
  *   combTextLst - 预组文本实例数组
  */
 export function createBlockCombState() {
+  // PIXI 显示对象不进入 Vue 响应式系统（见 mapLayerState 说明）
   const state = {
-    BlockLayer: reactive([]), // 总段图层实例（组件独立）
-    CombLayer: reactive([]), // 预组图层实例（组件独立）
-    blockTextLst: reactive([]), // 总段文本实例（组件独立）
-    combTextLst: reactive([]), // 预组文本实例（组件独立）
+    BlockLayer: [], // 总段图层实例（组件独立）
+    CombLayer: [], // 预组图层实例（组件独立）
+    blockTextLst: [], // 总段文本实例（组件独立）
+    combTextLst: [], // 预组文本实例（组件独立）
   };
 
   return {
-    ...state,
+    // 只读暴露：清空请用 .length = 0（见 mapLayerState 说明）
+    get BlockLayer() {
+      return state.BlockLayer;
+    },
+    get CombLayer() {
+      return state.CombLayer;
+    },
+    get blockTextLst() {
+      return state.blockTextLst;
+    },
+    get combTextLst() {
+      return state.combTextLst;
+    },
 
     /**
      * 销毁池内显示对象并清空数组

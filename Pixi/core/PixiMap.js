@@ -10,6 +10,7 @@
  */
 import { Application, Container } from "pixi.js";
 import { createMapInteraction } from "./MapInteraction";
+import { releaseRenderTextures } from "./RenderTextureCache";
 
 class PixiMap {
   /**
@@ -247,6 +248,10 @@ class PixiMap {
       this.interaction.destroy();
       this.interaction = null;
     }
+    // 释放绑定在本 renderer 上的 RenderTexture 缓存。必须早于
+    // app.destroy()——之后 renderer 已失效，按 renderer 分桶的缓存取不到，
+    // GPU 纹理会悬空并在 SPA 路由往返时被误命中
+    releaseRenderTextures(this);
     if (this.mapContainer) {
       this.mapContainer.removeAllListeners();
       this.mapContainer.destroy({ children: true });

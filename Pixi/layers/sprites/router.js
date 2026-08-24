@@ -15,7 +15,7 @@
  */
 import { Graphics, Sprite } from "pixi.js";
 import { loadAllTextures, getTexture } from "../../core/TextureLoader";
-import { lngLatToMercator } from "../../utils/mapUtils";
+import { lngLatToMapPixel } from "../../utils/mapUtils";
 import { clearSprites, startArrowAnimation } from "./animation";
 
 // 常量定义（源 SPRITE_CONFIG.ROUTER）
@@ -138,23 +138,10 @@ export const fitPathToView = ({
 };
 
 /**
- * 将经纬度坐标转换为地图像素坐标（参数顺序对齐源码调用）
- * @param {object} params 参数对象
- * @param {number} params.lng 经度
- * @param {number} params.lat 纬度
- * @param {object} params.mapInfo 地图信息对象（Origin）
- * @param {object} [params.offset] 偏移量 {x, y}
- * @returns {number[]} [x, y] 地图像素坐标
- */
-const convertLngLatToMapPixel = ({ lng, lat, mapInfo, offset = {} }) => {
-  const picCenter = lngLatToMercator(lat, lng);
-  const x = picCenter[0] - (mapInfo.Origin?.X || 0) + (offset.x || 0);
-  const y = -(picCenter[1] + (mapInfo.Origin?.Y || 0) + (offset.y || 0));
-  return [x, y];
-};
-
-/**
  * 转换路由点坐标到地图坐标
+ * 注：偏移量原实现加在 Origin 外侧（-(y+Origin)+offset），现统一走
+ * lngLatToMapPixel 的内侧语义（-(y+Origin+offset)）以与 ship/car 一致；
+ * 本项目 routerOffsetY 恒为 0/未配置，故输出不变。
  * @param {object} mapInfo 地图信息（Origin）
  * @param {object} MapConfigParams 地图配置参数（routerOffsetX/Y）
  * @returns {Function} (it) => ({x, y})，it 为 "lat,lng" 字符串
@@ -163,7 +150,7 @@ const convertRouterPointToMapCoords =
   (mapInfo, MapConfigParams) =>
   (it) => {
     const [lat, lng] = it.split(",").map(Number);
-    const [x, y] = convertLngLatToMapPixel({
+    const [x, y] = lngLatToMapPixel({
       lng,
       lat,
       mapInfo,

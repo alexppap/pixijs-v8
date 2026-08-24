@@ -477,21 +477,31 @@ export function recolor(state, colorList) {
     const colorItem = colorList[index];
     if (!graphic?.MyPolygonVertices || !colorItem) return;
 
-    graphic.clear();
-    graphic.poly(graphic.MyPolygonVertices);
-    const pixiColor = rgbaToPixiColor(colorItem.fillColor);
-    graphic.fill({ color: pixiColor.color, alpha: pixiColor.alpha });
-    graphic.stroke({
-      width: graphic.BorderWidth ?? 1,
-      color: graphic.BorderColor ?? 0x000000,
-    });
+    try {
+      graphic.clear();
+      graphic.poly(graphic.MyPolygonVertices);
+      const pixiColor = rgbaToPixiColor(colorItem.fillColor);
+      graphic.fill({ color: pixiColor.color, alpha: pixiColor.alpha });
+      graphic.stroke({
+        width: graphic.BorderWidth ?? 1,
+        color: graphic.BorderColor ?? 0x000000,
+      });
+    } catch (e) {
+      // 单个图形重绘失败不中断其余图形（否则整张底图停留在半新半旧状态）
+      console.warn(`重绘图形颜色失败（index ${index}）:`, e);
+    }
   });
 
   // 更新字体颜色
   state.fieldTextLst?.forEach((item, index) => {
     const colorItem = colorList[index];
-    if (item && colorItem) {
+    if (!item || !colorItem) return;
+
+    try {
+      // getHighContrastRGBA 对非法颜色会 throw，需逐项隔离
       item.style.fill = getHighContrastRGBA(colorItem.fillColor);
+    } catch (e) {
+      console.warn(`计算文字对比色失败（index ${index}）:`, e);
     }
   });
 

@@ -26,7 +26,7 @@ import {
   Texture,
 } from "pixi.js";
 import { loadAllTextures, getTexture, getPositionFrames } from "../../core/TextureLoader";
-import { lngLatToMercator } from "../../utils/mapUtils";
+import { lngLatToMapPixel } from "../../utils/mapUtils";
 import { clearSprites } from "./animation";
 
 // 常量定义（源 SPRITE_CONFIG）
@@ -67,22 +67,6 @@ const shipTextureCache = new Map();
 export function resetShipTextureCache() {
   shipTextureCache.clear();
 }
-
-/**
- * 将经纬度坐标转换为地图像素坐标（参数顺序对齐源码调用）
- * @param {object} params 参数对象
- * @param {number} params.lng 经度
- * @param {number} params.lat 纬度
- * @param {object} params.mapInfo 地图信息对象（Origin）
- * @param {object} [params.offset] 偏移量 {x, y}
- * @returns {number[]} [x, y] 地图像素坐标
- */
-const convertLngLatToMapPixel = ({ lng, lat, mapInfo, offset = {} }) => {
-  const picCenter = lngLatToMercator(lat, lng);
-  const x = picCenter[0] - mapInfo.Origin?.X + (offset.x || 0);
-  const y = -(picCenter[1] + mapInfo.Origin?.Y + (offset.y || 0));
-  return [x, y];
-};
 
 /**
  * 获取base64图片URL
@@ -160,7 +144,7 @@ export async function drawShipSprites({
  */
 const prepareShipImageData = (props, mapInfo) => {
   return props.projectMapLocationInfos.map((element) => {
-    const [x, y] = convertLngLatToMapPixel({
+    const [x, y] = lngLatToMapPixel({
       lng: Number(element.CenterX),
       lat: Number(element.CenterY),
       mapInfo,
@@ -486,8 +470,10 @@ const createAndAddShipPositionMarkers = ({
   spritesList.push(staticContainer, combinedContainer);
   mapContainer.addChild(staticContainer, combinedContainer);
 
-  // 添加悬停效果
-  addSpriteHoverEffect({
+  // 添加悬停效果。destroy 句柄挂到容器上，由 clearSprites 在销毁前调用：
+  // 否则 mouseover/mouseout 监听与运行中的 rAF 循环随容器销毁而悬空，
+  // 反复重绘船体会持续泄漏动画帧回调
+  combinedContainer.__hoverEffect = addSpriteHoverEffect({
     Map,
     parentContainer: mapContainer,
     sprite: combinedContainer,

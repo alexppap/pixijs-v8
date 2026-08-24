@@ -12,7 +12,7 @@
  */
 import { Sprite, Text } from "pixi.js";
 import { loadAllTextures, getTexture } from "../../core/TextureLoader";
-import { lngLatToMercator } from "../../utils/mapUtils";
+import { lngLatToMapPixel } from "../../utils/mapUtils";
 import { clearSprites } from "./animation";
 
 // 常量定义（源 SPRITE_CONFIG.CAR）
@@ -34,22 +34,6 @@ const CAR_CONFIG = {
 const CAR_TEXTURE_NAME = "pingbanchece";
 
 /**
- * 将经纬度坐标转换为地图像素坐标（参数顺序对齐源码调用）
- * @param {object} params 参数对象
- * @param {number} params.lng 经度
- * @param {number} params.lat 纬度
- * @param {object} params.mapInfo 地图信息对象（Origin）
- * @param {object} [params.offset] 偏移量 {x, y}
- * @returns {number[]} [x, y] 地图像素坐标
- */
-const convertLngLatToMapPixel = ({ lng, lat, mapInfo, offset = {} }) => {
-  const picCenter = lngLatToMercator(lat, lng);
-  const x = picCenter[0] - mapInfo.Origin?.X + (offset.x || 0);
-  const y = -(picCenter[1] + mapInfo.Origin?.Y + (offset.y || 0));
-  return [x, y];
-};
-
-/**
  * 转换车辆坐标到地图坐标
  * @param {object} mapInfo 地图信息对象
  * @param {object} MapConfigParams 地图配置参数（routerOffsetX/Y）
@@ -58,7 +42,7 @@ const convertLngLatToMapPixel = ({ lng, lat, mapInfo, offset = {} }) => {
 const convertCarPointToMapCoords =
   (mapInfo, MapConfigParams) =>
   (it) => {
-    const [x, y] = convertLngLatToMapPixel({
+    const [x, y] = lngLatToMapPixel({
       lng: Number(it.x),
       lat: Number(it.y),
       mapInfo,

@@ -19,12 +19,20 @@ import { reactive } from "vue";
  */
 export function createCameraLstState() {
   const state = {
-    CameraLstPIXI: reactive([]), // 地图上的摄像头精灵实例列表
+    // PIXI 显示对象不进入 Vue 响应式系统（见 mapLayerState 说明）
+    CameraLstPIXI: [], // 地图上的摄像头精灵实例列表
+    // 纯数据，由 CameraPanel.vue 直接渲染（show/left/top/zIndex 需响应式）
     showCameraLst: reactive([]), // 显示中的摄像头视频列表
   };
 
   return {
-    ...state,
+    // 只读暴露：清空请用 .length = 0（见 mapLayerState 说明）
+    get CameraLstPIXI() {
+      return state.CameraLstPIXI;
+    },
+    get showCameraLst() {
+      return state.showCameraLst;
+    },
 
     /**
      * 销毁池内显示对象并清空列表

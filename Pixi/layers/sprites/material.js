@@ -103,10 +103,11 @@ export async function drawMaterials({
   spriteState,
   Map,
 }) {
-  // 清空现有的物资图形
+  // 清空现有的物资图形（原地清空：赋新数组会断开 spriteState.destroy 的
+  // 闭包引用，导致新数组内的图形在组件卸载时永不销毁）
   if (spriteState.materials.length) {
     spriteState.materials.forEach((item) => item.destroy());
-    spriteState.materials = [];
+    spriteState.materials.length = 0;
   }
 
   const materialImgLst = props?.materialMapLocationInfos?.ImageResources || [];
