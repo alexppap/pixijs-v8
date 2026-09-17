@@ -304,8 +304,6 @@ export function createCoordinateSystem(ctx) {
       originPositionX.value,
       originPositionY.value,
     ]);
-
-    pixiMap.render();
   };
 
   /**
@@ -350,9 +348,8 @@ export function createCoordinateSystem(ctx) {
 
     container.position.set(originPositionX.value, originPositionY.value);
 
-    // 关闭弹窗并重绘
+    // 关闭弹窗（画面由常驻渲染的 ticker 在下一帧刷新）
     ctx.closeDialog?.();
-    pixiMap.render();
   };
 
   return {

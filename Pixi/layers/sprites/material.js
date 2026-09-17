@@ -92,7 +92,6 @@ const loadMaterialTextures = async (materialImgLst) => {
  * @param {object} params.mapContainer 地图容器
  * @param {Function} params.materialOnClick 物资点击事件处理函数
  * @param {object} params.spriteState 精灵状态管理对象
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
  */
 export async function drawMaterials({
   props,
@@ -101,7 +100,6 @@ export async function drawMaterials({
   mapContainer,
   materialOnClick,
   spriteState,
-  Map,
 }) {
   // 清空现有的物资图形（原地清空：赋新数组会断开 spriteState.destroy 的
   // 闭包引用，导致新数组内的图形在组件卸载时永不销毁）
@@ -157,7 +155,4 @@ export async function drawMaterials({
       spriteState.materials.push(sprite);
     }
   });
-
-  // 优化性能：只在所有图形创建完成后渲染一次
-  Map?.render?.();
 }

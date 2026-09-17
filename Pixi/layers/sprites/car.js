@@ -7,7 +7,7 @@
  *              - PIXI.Loader.shared.resources['pingbanchece'].texture →
  *                TextureLoader.getTexture（缺失时 await loadAllTextures 兜底）
  *              - PIXI.Text → v8 Text 直接可用
- *              - Map.render() → Map.render?.()
+ *              - 源码 Map.render() 删除：常驻渲染下 ticker 每帧自动出图
  * Version: 1.0.0
  */
 import { Sprite, Text } from "pixi.js";
@@ -111,7 +111,6 @@ const createCarLabels = (point, angle) => {
  * @param {object} params.MapConfigParams 地图配置参数
  * @param {object} params.angle 角度对象（value 为当前角度）
  * @param {object} params.mapContainer 地图容器
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
  * @param {object} params.spriteState 精灵状态管理对象
  */
 export async function drawCarSprites({
@@ -120,7 +119,6 @@ export async function drawCarSprites({
   MapConfigParams,
   angle,
   mapContainer,
-  Map,
   spriteState,
 }) {
   // 清空现有精灵
@@ -162,6 +160,4 @@ export async function drawCarSprites({
     spriteState.carSprites.push(text1, text2);
     mapContainer.addChild(text1, text2);
   });
-
-  Map.render?.();
 }

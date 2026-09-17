@@ -28,19 +28,17 @@ export {
  * 一次性装配全部绘制状态（实例间隔离）
  * @param {Function} [emit] 组件 emit 函数（可空；用于派生弹窗关闭回调）
  * @param {object} [options] 附加注入
- * @param {Function} [options.onRender] 关闭弹窗后触发渲染（pixiMap.render）
  * @param {Function} [options.disposeCamera] video.js 播放器销毁回调（预留）
  * @returns {object} { dialogState, spriteState, cameraLstState, textState,
  *                     blockCombState, mapLayerState, destroy }
  */
 export function createAllStates(emit, options = {}) {
-  const { onRender, disposeCamera } = options;
+  const { disposeCamera } = options;
 
   const dialogState = createDialogState({
     onChangeShowTransitRecords: emit
       ? () => emit("changeShowTransitRecords")
       : undefined,
-    onRender,
   });
   const spriteState = createSpriteState();
   const cameraLstState = createCameraLstState();

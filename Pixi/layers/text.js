@@ -8,7 +8,8 @@
  *              - PIXI.DEG_TO_RAD → 具名导入 DEG_TO_RAD
  *              - event.data.originalEvent.clientX → event.nativeEvent.clientX
  *                （v8 FederatedEvent 字段更名，见移植计划 §5）
- *              - Map.render() → Map.render?.()（常驻渲染下冗余但无害）
+ *              - 源码 Map.render() 全部删除：应用以 autoStart 常驻渲染，
+ *                ticker 每帧自动出图，手动渲染只会多渲一帧
  *              - drawFieldText 参数由 11 个位置参数改为 ctx 对象；源码内联
  *                的 ClickedMapItemBorder 局部重赋值（闭包丢失）改为经
  *                dialogState.setClickedMapItemBorder 正确登记；开头四行
@@ -121,13 +122,18 @@ const createTextContainer = (texts, angle) => {
 };
 
 /**
- * 计算对话框位置和连接线信息
+ * 计算场地文字点击弹窗的位置与连接线信息（就地写入 DialogData）。
+ *
+ * 注：behaviors/dialogPosition.js 也有个 calculateDialogPosition，但两者
+ * 语义不同、不可互换——那个按 clickPoint + 实测弹窗 DOM 尺寸做溢出回避；
+ * 本函数取自 event.nativeEvent 的 client 坐标，按设计稿固定边界
+ * （MAX_WIDTH/DIALOG_WIDTH）判断溢出，不读 DOM。故此处改名区分。
  * v8 差异：event.data.originalEvent → event.nativeEvent
  * @param {object} event v8 FederatedPointerEvent
  * @param {object} DialogData 对话框数据（就地更新）
  * @returns {object} 更新后的对话框数据
  */
-const calculateDialogPosition = (event, DialogData) => {
+const calculateFieldDialogPosition = (event, DialogData) => {
   const clientX = event.nativeEvent?.clientX ?? 0;
   const clientY = event.nativeEvent?.clientY ?? 0;
   DialogData.DialogX = clientX / DialogData.zoomX;
@@ -202,10 +208,9 @@ const adjustDialogVerticalPosition = (DialogData) => {
  * @param {object} params.props 组件属性（FieldTextInfos）
  * @param {object} params.mapInfo 地图信息（Origin）
  * @param {object} params.mapContainer 地图容器
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
  * @param {object} params.textState 文本状态（FieldTexts）
  */
-export function drawFieldTexts({ props, mapInfo, mapContainer, Map, textState }) {
+export function drawFieldTexts({ props, mapInfo, mapContainer, textState }) {
   // 销毁现有文本实例
   destroyTextInstances(textState.FieldTexts);
 
@@ -229,8 +234,6 @@ export function drawFieldTexts({ props, mapInfo, mapContainer, Map, textState })
     textState.FieldTexts.push(TextObj);
     mapContainer.addChild(TextObj);
   });
-
-  Map.render?.();
 }
 
 /**
@@ -242,7 +245,6 @@ export function drawFieldTexts({ props, mapInfo, mapContainer, Map, textState })
  * @param {object} ctx.props 组件属性（fieldClickable/FieldInfos）
  * @param {object[]} ctx.MapLayer 底图元素池（按 FieldID 匹配目标图形）
  * @param {object} ctx.dialogState 弹窗状态（DialogData/clickEventType/setClickedMapItemBorder）
- * @param {object} ctx.Map PixiMap 实例（render 触发渲染）
  * @param {Function} [ctx.MapLayerPush] 高亮边框入池函数
  * @param {object} ctx.textState 文本状态（FieldTextsPIXI）
  */
@@ -253,7 +255,6 @@ export function drawFieldText({
   props,
   MapLayer,
   dialogState,
-  Map,
   MapLayerPush,
   textState,
 }) {
@@ -322,7 +323,7 @@ export function drawFieldText({
           DialogData.showDialog = true;
 
           // 计算对话框位置和连接线信息
-          calculateDialogPosition(event, DialogData);
+          calculateFieldDialogPosition(event, DialogData);
 
           // 更新对话框数据
           target.DialogData = item?.DialogData;
@@ -331,8 +332,6 @@ export function drawFieldText({
 
           // 调整对话框垂直位置
           adjustDialogVerticalPosition(DialogData);
-
-          Map.render?.();
         };
 
         if (target && item) {
@@ -341,7 +340,4 @@ export function drawFieldText({
       }
     }
   });
-
-  // 统一渲染
-  Map.render?.();
 }

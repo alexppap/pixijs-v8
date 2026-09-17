@@ -245,7 +245,6 @@ const handleCameraClick = ({
  * @param {object} params.originScale 原始缩放比例（ref）
  * @param {object} params.scale 当前缩放比例（ref）
  * @param {object} params.DialogData 对话框数据
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
  * @param {object} params.props 组件属性（ShouldDrawCamera/Clickable）
  * @param {object} params.cameraLstState 摄像头状态
  * @param {object} [params.deps] 注入依赖
@@ -259,7 +258,6 @@ export async function drawCamera({
   originScale,
   scale,
   DialogData,
-  Map,
   props,
   cameraLstState,
   deps = {},
@@ -319,7 +317,6 @@ export async function drawCamera({
       console.error(`绘制摄像头 ${index} 失败:`, error);
     }
   });
-  Map.render?.();
 }
 
 /**

@@ -66,7 +66,11 @@ const drawPolygon = (graphics, vertices, style) => {
 };
 
 /**
- * 处理多边形顶点，去重并收集坐标
+ * 收集多边形顶点：去重后输出**世界**坐标，并把原始点位累积到
+ * xarr/yarr/arr（供调用方计算底图边界、重置视角）。
+ * 注：utils/mapUtils 里有个曾与本函数同名的 processPolygonVertices，但语义
+ * 不同——那个输出以中心为原点的局部坐标且无副作用输出。两者不可互换，
+ * 故本函数改名以消除歧义。
  * @param {object} params 参数对象
  * @param {object[]} params.mapPoints 原始点位（{X, Y} 格式）
  * @param {number[]} params.xarr X坐标数组（输出）
@@ -74,7 +78,7 @@ const drawPolygon = (graphics, vertices, style) => {
  * @param {object[]} params.arr 点位数组（输出）
  * @returns {object} 处理后的顶点信息 { vertices, verticesOrigin }
  */
-const processPolygonVertices = ({ mapPoints, xarr, yarr, arr }) => {
+const collectPolygonVertices = ({ mapPoints, xarr, yarr, arr }) => {
   const vertices = [];
   const verticesOrigin = [];
 
@@ -209,11 +213,15 @@ const drawHullLayer = ({
   state,
 }) => {
   const { MapLayer, fieldTextLst } = state;
-  const elements = JSON.parse(JSON.stringify(props.mapLayerInfos));
+  // 直接遍历原始数据：本函数只读 element 的字段，不回写。
+  // 源实现在此做 JSON 深拷贝，大底图上是明显的卡顿源，且同库
+  // drawClickableLayer / drawMergedLayer 本来就直接遍历原数据——
+  // 移除后三个分支行为一致。
+  const elements = props.mapLayerInfos || [];
 
   elements.forEach((element) => {
     // 处理顶点
-    const { vertices, verticesOrigin } = processPolygonVertices({
+    const { vertices, verticesOrigin } = collectPolygonVertices({
       mapPoints: element.MapPoints,
       xarr,
       yarr,
@@ -241,6 +249,10 @@ const drawHullLayer = ({
         visible: props.feildTextVisible,
         width: mapElement.width,
       });
+      // 回填 FieldID：recolor 靠它把文字与图形配对。
+      // 不能靠数组下标——只有 name 非空的元素才入 fieldTextLst，
+      // 与 MapLayer 的下标天然错位
+      elementText.FieldID = element.FieldID;
 
       fieldTextLst.push(elementText);
       mapContainer.addChild(elementText);
@@ -268,52 +280,58 @@ const drawClickableLayer = ({
 }) => {
   const { MapLayer } = state;
 
-  // 按ZIndex排序图层
-  mapInfo.LayerInfos.sort((a, b) => b.ZIndex - a.ZIndex).forEach((layer) => {
-    layer.Elements.forEach((element) => {
-      if (element.Type === "Polygon") {
-        // 处理顶点
-        const { vertices, verticesOrigin } = processPolygonVertices({
-          mapPoints: element.MapPoints,
-          xarr,
-          yarr,
-          arr,
-        });
+  // 按ZIndex排序图层（复制后排序：sort 原地修改会改变调用方 mapInfo 的
+  // LayerInfos 顺序，导致第二次绘制的输入与第一次不同）
+  [...mapInfo.LayerInfos]
+    .sort((a, b) => b.ZIndex - a.ZIndex)
+    .forEach((layer) => {
+      layer.Elements.forEach((element) => {
+        if (element.Type === "Polygon") {
+          // 处理顶点
+          const { vertices, verticesOrigin } = collectPolygonVertices({
+            mapPoints: element.MapPoints,
+            xarr,
+            yarr,
+            arr,
+          });
 
-        // 创建图形元素
-        const mapElement = createPolygonGraphic({
-          item: element,
-          polygonVertices: vertices,
-          mapInfo: null, // 不需要，因为是直接设置位置
-          borderConfig: { width: element.BorderWidth, color: element.BorderColor }, // 自定义边框配置
-          fillColor: element.FillColor,
-          transparency: 1,
-          options: {
-            centerCalculation: false, // 不计算中心，直接设置位置
-            interactive: true, // 设置交互
-            position: { x: 0, y: 0, angle: 0, scaleX: 1, scaleY: 1 }, // 初始位置
-          },
-        });
+          // 创建图形元素
+          const mapElement = createPolygonGraphic({
+            item: element,
+            polygonVertices: vertices,
+            mapInfo: null, // 不需要，因为是直接设置位置
+            borderConfig: {
+              width: element.BorderWidth,
+              color: element.BorderColor,
+            }, // 自定义边框配置
+            fillColor: element.FillColor,
+            transparency: 1,
+            options: {
+              centerCalculation: false, // 不计算中心，直接设置位置
+              interactive: true, // 设置交互
+              position: { x: 0, y: 0, angle: 0, scaleX: 1, scaleY: 1 }, // 初始位置
+            },
+          });
 
-        // 存储信息和交互设置（v8：eventMode + cursor）
-        mapElement.FieldID = element.FieldID;
-        mapElement.polygonVertices = vertices;
-        mapElement.eventMode = "static";
-        mapElement.cursor = "pointer";
+          // 存储信息和交互设置（v8：eventMode + cursor）
+          mapElement.FieldID = element.FieldID;
+          mapElement.polygonVertices = vertices;
+          mapElement.eventMode = "static";
+          mapElement.cursor = "pointer";
 
-        // 计算中心点
-        const [centerX, centerY] = findPolygonCentroid(verticesOrigin);
-        mapElement.centerX = centerX;
-        mapElement.centerY = centerY;
+          // 计算中心点
+          const [centerX, centerY] = findPolygonCentroid(verticesOrigin);
+          mapElement.centerX = centerX;
+          mapElement.centerY = centerY;
 
-        // 添加到图层和容器
-        MapLayer.push(mapElement);
-        mapContainer.addChild(mapElement);
-      }
-      // 文本类型元素处理（当前注释掉，保留结构）
-      // else if (element.Type === "Text") { ... }
+          // 添加到图层和容器
+          MapLayer.push(mapElement);
+          mapContainer.addChild(mapElement);
+        }
+        // 文本类型元素处理（当前注释掉，保留结构）
+        // else if (element.Type === "Text") { ... }
+      });
     });
-  });
 };
 
 /**
@@ -344,34 +362,36 @@ const drawMergedLayer = ({
   mapContainer.addChild(mainGraphics);
   mapContainer.addChild(textGraphics);
 
-  // 按ZIndex排序图层
-  mapInfo.LayerInfos.sort((a, b) => b.ZIndex - a.ZIndex).forEach((layer) => {
-    const targetGraphics = layer.ZIndex !== -10 ? mainGraphics : textGraphics;
-    const alpha = layer.ZIndex !== -10 ? 1 : 0.5;
+  // 按ZIndex排序图层（复制后排序，避免原地修改调用方的 LayerInfos 顺序）
+  [...mapInfo.LayerInfos]
+    .sort((a, b) => b.ZIndex - a.ZIndex)
+    .forEach((layer) => {
+      const targetGraphics = layer.ZIndex !== -10 ? mainGraphics : textGraphics;
+      const alpha = layer.ZIndex !== -10 ? 1 : 0.5;
 
-    layer.Elements.forEach((element) => {
-      if (element.Type === "Polygon") {
-        // 处理顶点
-        const { vertices } = processPolygonVertices({
-          mapPoints: element.MapPoints,
-          xarr,
-          yarr,
-          arr,
-        });
+      layer.Elements.forEach((element) => {
+        if (element.Type === "Polygon") {
+          // 处理顶点
+          const { vertices } = collectPolygonVertices({
+            mapPoints: element.MapPoints,
+            xarr,
+            yarr,
+            arr,
+          });
 
-        // 绘制多边形
-        drawPolygon(targetGraphics, vertices, {
-          fillColor: element.FillColor,
-          borderWidth: element.BorderWidth,
-          borderColor: element.BorderColor,
-          borderType: element.BorderType || "Default",
-          alpha,
-        });
-      }
-      // 文本类型元素处理（当前注释掉，保留结构）
-      // else if (element.Type === "Text") { ... }
+          // 绘制多边形
+          drawPolygon(targetGraphics, vertices, {
+            fillColor: element.FillColor,
+            borderWidth: element.BorderWidth,
+            borderColor: element.BorderColor,
+            borderType: element.BorderType || "Default",
+            alpha,
+          });
+        }
+        // 文本类型元素处理（当前注释掉，保留结构）
+        // else if (element.Type === "Text") { ... }
+      });
     });
-  });
 
   // 添加到图层
   MapLayer.push(mainGraphics);
@@ -465,16 +485,40 @@ export function drawLayer({
 
 /**
  * 颜色重绘（供 watch colorList 调用，源 MapTemplate.vue 2647–2654 的 v8 改写）
+ *
+ * 配对策略：colorList 各项若带 FieldID，则按 FieldID 精确匹配图形与文字；
+ * 否则回退为数组下标对应（源码行为）。下标对应只在 isHull 模式成立——
+ * merged 模式下 MapLayer 只有 mainGraphics/textGraphics 两项、fieldTextLst
+ * 为空，三方长度根本不一致，靠下标必然错配。
  * @param {object} state mapLayerState（MapLayer / fieldTextLst）
- * @param {object[]} colorList 颜色列表（每项含 fillColor，与 MapLayer 逐项对应）
+ * @param {object[]} colorList 颜色列表（每项含 fillColor，可选 FieldID）
  * @returns {boolean} 是否执行了重绘
  */
 export function recolor(state, colorList) {
   if (!colorList || !colorList.length) return false;
 
+  // FieldID → 颜色项。colorList 不带 FieldID 时该表为空，走下标回退
+  const colorByFieldId = new Map();
+  colorList.forEach((item) => {
+    const fieldId = item?.FieldID ?? item?.fieldID ?? item?.fieldId;
+    if (fieldId !== undefined && fieldId !== null) {
+      colorByFieldId.set(fieldId, item);
+    }
+  });
+  const matchByFieldId = colorByFieldId.size > 0;
+
+  /**
+   * 取某个显示对象对应的颜色项
+   * @param {object} target 图形或文字元素（含 FieldID）
+   * @param {number} index 在各自数组中的下标（回退用）
+   * @returns {object|undefined} 颜色项
+   */
+  const pickColor = (target, index) =>
+    matchByFieldId ? colorByFieldId.get(target?.FieldID) : colorList[index];
+
   // 重绘图形颜色（v8：clear + poly + fill + stroke）
   state.MapLayer?.forEach((graphic, index) => {
-    const colorItem = colorList[index];
+    const colorItem = pickColor(graphic, index);
     if (!graphic?.MyPolygonVertices || !colorItem) return;
 
     try {
@@ -488,20 +532,20 @@ export function recolor(state, colorList) {
       });
     } catch (e) {
       // 单个图形重绘失败不中断其余图形（否则整张底图停留在半新半旧状态）
-      console.warn(`重绘图形颜色失败（index ${index}）:`, e);
+      console.warn(`重绘图形颜色失败（FieldID ${graphic?.FieldID}）:`, e);
     }
   });
 
   // 更新字体颜色
   state.fieldTextLst?.forEach((item, index) => {
-    const colorItem = colorList[index];
+    const colorItem = pickColor(item, index);
     if (!item || !colorItem) return;
 
     try {
       // getHighContrastRGBA 对非法颜色会 throw，需逐项隔离
       item.style.fill = getHighContrastRGBA(colorItem.fillColor);
     } catch (e) {
-      console.warn(`计算文字对比色失败（index ${index}）:`, e);
+      console.warn(`计算文字对比色失败（FieldID ${item?.FieldID}）:`, e);
     }
   });
 

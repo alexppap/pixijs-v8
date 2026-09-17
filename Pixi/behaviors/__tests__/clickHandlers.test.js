@@ -19,7 +19,7 @@ import { createAllStates } from "@/components/Pixi/state";
 // mock 依赖
 // ---------------------------------------------------------------------
 
-/** mock PixiMap 实例（mapContainer + render spy） */
+/** mock PixiMap 实例（仅需 mapContainer；常驻渲染下无手动 render） */
 const createMockPixiMap = () => {
   const children = [];
   return {
@@ -29,7 +29,6 @@ const createMockPixiMap = () => {
       scale: { set: vi.fn() },
       position: { set: vi.fn() },
     },
-    render: vi.fn(),
   };
 };
 
@@ -196,7 +195,6 @@ describe("PBSOnClick", () => {
     expect(t.pixiMap.mapContainer.scale.set).toHaveBeenCalledWith(2);
     expect(t.pixiMap.mapContainer.position.set).toHaveBeenCalledWith(11, 22);
     expect(t.coordinateSystem.adjustElementsOnScale).toHaveBeenCalledWith(2);
-    expect(t.pixiMap.render).toHaveBeenCalled();
   });
 
   it("PBS 不存在时直接返回，不抛错", async () => {
@@ -337,7 +335,6 @@ describe("onHullFieldClick", () => {
     });
     // isSynced 联动
     expect(t.emit).toHaveBeenCalledWith("changeClick", "F-01");
-    expect(t.pixiMap.render).toHaveBeenCalled();
   });
 
   it("actualSmall 小图模式：clientX 附加画布宽度与双偏移", async () => {

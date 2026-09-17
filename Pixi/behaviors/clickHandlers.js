@@ -19,7 +19,7 @@
  *              - 详情接口由同步 XHR 回调改 await mapApi.xxx()（全异步）
  *              - document.getElementById("dialog") → getDialogDom 注入
  *              - v8：event.data.global → event.global
- *              - Map.render() → pixiMap.render?.()（常驻渲染下冗余但保留）
+ *              - 源码 Map.render() 全部删除：常驻渲染下 ticker 每帧自动出图
  *              - exportMapAsPNG 已由 core/PixiMap.exportAsPNG 提供，不在此实现
  * Version: 1.0.0
  */
@@ -33,7 +33,7 @@ import { CLICK_CONFIG } from "./dialogPosition";
 /**
  * 创建点击处理器集合
  * @param {object} ctx 依赖注入上下文
- * @param {object} ctx.pixiMap PixiMap 实例（mapContainer/render）
+ * @param {object} ctx.pixiMap PixiMap 实例（提供 mapContainer）
  * @param {object} ctx.states createAllStates 结果（dialogState/spriteState/
  *   mapLayerState 等）
  * @param {object} ctx.mapInfo 地图信息对象（Scale 等，调用方维护）
@@ -176,7 +176,6 @@ export function createClickHandlers(ctx) {
       if (props.isSynced) {
         emit("changeClick", target.name);
       }
-      pixiMap?.render?.();
     }, 100);
   };
 
@@ -202,7 +201,6 @@ export function createClickHandlers(ctx) {
       const newPosition = scaleTransform.getNewPosition(scale.value);
       container.position.set(newPosition.x, newPosition.y);
       coordinateSystem.adjustElementsOnScale(scale.value);
-      pixiMap?.render?.();
     }
 
     resetDialogState();
@@ -226,7 +224,6 @@ export function createClickHandlers(ctx) {
     itemBorderLst.push(border);
     registerClickedBorder(border);
     container.addChild(border);
-    pixiMap?.render?.();
 
     // 查询 PBS 详细信息（源回调式改 await）
     try {

@@ -55,10 +55,9 @@ import { createTextState } from "@/components/Pixi/state/textState";
 const MAP_INFO = { Origin: { X: 10, Y: 20 } };
 
 describe("drawFieldTexts（场地标签）", () => {
-  it("按经纬度定位标签并应用角度，随后触发渲染", () => {
+  it("按经纬度定位标签并应用角度", () => {
     const textState = createTextState();
     const container = new Container();
-    const Map = { render: vi.fn() };
     const props = {
       FieldTextInfos: {
         LayerLabelOverlayInfos: [
@@ -71,7 +70,6 @@ describe("drawFieldTexts（场地标签）", () => {
       props,
       mapInfo: MAP_INFO,
       mapContainer: container,
-      Map,
       textState,
     });
 
@@ -86,7 +84,6 @@ describe("drawFieldTexts（场地标签）", () => {
     expect(label.anchor.x).toBe(0.5);
     expect(label.anchor.y).toBe(0.5);
     expect(container.children).toContain(label);
-    expect(Map.render).toHaveBeenCalled();
   });
 
   it("重复绘制先销毁旧实例", () => {
@@ -103,14 +100,12 @@ describe("drawFieldTexts（场地标签）", () => {
       props,
       mapInfo: MAP_INFO,
       mapContainer: new Container(),
-      Map: { render: vi.fn() },
       textState,
     });
     drawFieldTexts({
       props,
       mapInfo: MAP_INFO,
       mapContainer: new Container(),
-      Map: { render: vi.fn() },
       textState,
     });
 
@@ -122,7 +117,6 @@ describe("drawFieldText（场地文字 + 点击弹窗）", () => {
   const buildCtx = (overrides = {}) => {
     const textState = createTextState();
     const container = new Container();
-    const Map = { render: vi.fn() };
     const MapLayerPush = vi.fn();
     const setClickedMapItemBorder = vi.fn();
 
@@ -175,12 +169,11 @@ describe("drawFieldText（场地文字 + 点击弹窗）", () => {
       props: { fieldClickable: true, FieldInfos: {} },
       MapLayer: [target],
       dialogState: { DialogData, setClickedMapItemBorder },
-      Map,
       MapLayerPush,
       textState,
       ...overrides,
     };
-    return { ctx, target, DialogData, Map, MapLayerPush, setClickedMapItemBorder, container, textState };
+    return { ctx, target, DialogData, MapLayerPush, setClickedMapItemBorder, container, textState };
   };
 
   it("创建多行文本容器：逐行叠加、水平居中、整体旋转", () => {

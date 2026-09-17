@@ -7,16 +7,13 @@
  *              （1318–1323）、visibilitychange 长时间隐藏重载（2730–2741）、
  *              __webglDebug 调试对象（1325–1363）移植而来。差异说明：
  *              contextrestored 沿用源码 location.reload() 整页重载策略；
- *              keepAlive 渲染在 autoStart 常驻渲染模式下冗余但无害，保留以
- *              兼容按需渲染切换；__webglDebug 仅开发环境（DEV）挂载。
- * Version: 1.0.0
+ *              keepAlive 定时渲染已删除——应用以 autoStart 常驻渲染，ticker
+ *              每帧出图，定时补渲只是多渲一帧；__webglDebug 仅开发环境挂载。
+ * Version: 1.1.0
  */
 
 /** 页面隐藏超过该时长（2小时）恢复时整页重载 */
 const HIDDEN_RELOAD_THRESHOLD = 2 * 60 * 60 * 1000;
-
-/** keepAlive 定时渲染间隔（1分钟） */
-const KEEP_ALIVE_INTERVAL = 1 * 60 * 1000;
 
 /**
  * 创建 WebGL 稳定性保障实例
@@ -30,7 +27,6 @@ export function createWebGLGuard(pixiMap) {
   }
 
   const canvas = pixiMap.view;
-  let keepAliveInterval = null; // keepAlive 定时器
   let hiddenTime = null; // 页面隐藏起始时间戳（null 表示未经历过隐藏）
 
   // ------------------------------
@@ -46,15 +42,6 @@ export function createWebGLGuard(pixiMap) {
     // 沿用源码策略：整页重载，保证所有纹理与渲染状态一致
     location.reload();
   };
-
-  // ------------------------------
-  // keepAlive 定时渲染
-  // ------------------------------
-  keepAliveInterval = setInterval(() => {
-    if (pixiMap.app) {
-      pixiMap.render();
-    }
-  }, KEEP_ALIVE_INTERVAL);
 
   // ------------------------------
   // 页面长时间隐藏后重载
@@ -126,16 +113,12 @@ export function createWebGLGuard(pixiMap) {
 
   return {
     /**
-     * 移除全部监听与定时器，清理调试对象，释放资源
+     * 移除全部监听，清理调试对象，释放资源
      */
     destroy() {
       canvas.removeEventListener("webglcontextlost", handleContextLost);
       canvas.removeEventListener("webglcontextrestored", handleContextRestored);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (keepAliveInterval) {
-        clearInterval(keepAliveInterval);
-        keepAliveInterval = null;
-      }
       if (import.meta.env.DEV && window.__webglDebug) {
         delete window.__webglDebug;
       }

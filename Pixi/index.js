@@ -56,11 +56,11 @@ export {
   drawRouterSprites,
   fitPathToView,
   generateArrowPathLst,
+  stopRouterAnimation,
 } from "./layers/sprites/router";
 export {
   ANIMATION_SPEED,
-  startArrowAnimation,
-  stopAnimation,
+  createAnimationController,
   clearSprites,
 } from "./layers/sprites/animation";
 

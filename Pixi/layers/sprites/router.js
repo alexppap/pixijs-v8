@@ -11,12 +11,45 @@
  *                beginFill/drawCircle/endFill → circle().fill()
  *              - 源码引用全局 Map 的 fitPathToView（源 mapUtils.js 510–572）
  *                移植为参数化局部实现，避免全局依赖
- * Version: 1.0.0
+ *              2026-08-25（P1-3）：箭头动画控制器由模块级单例改为按
+ *              PixiMap 实例分桶（WeakMap），双图联动时互不停掉对方动画
+ * Version: 1.1.0
  */
 import { Graphics, Sprite } from "pixi.js";
 import { loadAllTextures, getTexture } from "../../core/TextureLoader";
 import { lngLatToMapPixel } from "../../utils/mapUtils";
-import { clearSprites, startArrowAnimation } from "./animation";
+import { clearSprites, createAnimationController } from "./animation";
+
+/**
+ * 每个 PixiMap 实例一个箭头动画控制器（WeakMap 分桶）。
+ * 源码为模块级单例，双图联动时第二张图启动动画会停掉第一张图的；
+ * 按实例分桶后互不干扰。pixiMap 被回收时条目自动消失，无需手动清理。
+ * @type {WeakMap<object, object>}
+ */
+const animationControllers = new WeakMap();
+
+/**
+ * 取（或惰性创建）某个地图实例的箭头动画控制器
+ * @param {object} pixiMap PixiMap 实例
+ * @returns {object|null} 动画控制器，pixiMap 缺失时 null
+ */
+const getAnimationController = (pixiMap) => {
+  if (!pixiMap) return null;
+  let controller = animationControllers.get(pixiMap);
+  if (!controller) {
+    controller = createAnimationController();
+    animationControllers.set(pixiMap, controller);
+  }
+  return controller;
+};
+
+/**
+ * 停止某个地图实例的箭头动画（供调用方在卸载/切图时调用）
+ * @param {object} pixiMap PixiMap 实例
+ */
+export function stopRouterAnimation(pixiMap) {
+  animationControllers.get(pixiMap)?.stopAnimation();
+}
 
 // 常量定义（源 SPRITE_CONFIG.ROUTER）
 const ROUTER_CONFIG = {
@@ -84,7 +117,6 @@ const calculateBoundsFrom2DPoints = (points) => {
  * @param {object} params.mapContainer 地图容器
  * @param {object} params.scale 缩放比例（ref，回写适配后比例）
  * @param {string[]} params.routerProps 路径数据（"lat,lng" 字符串数组）
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
  */
 export const fitPathToView = ({
   mapConfigParams,
@@ -92,7 +124,6 @@ export const fitPathToView = ({
   mapContainer,
   scale,
   routerProps,
-  Map,
 }) => {
   if (!mapInfo || !mapContainer || !scale || !routerProps) {
     console.error("Missing required parameters for fitPathToView");
@@ -133,8 +164,6 @@ export const fitPathToView = ({
     mapContainer.pivot.set(centerX, centerY);
   }
   mapContainer?.position.set(containerWidth / 2, containerHeight / 2);
-  // 触发地图重绘
-  Map?.render?.();
 };
 
 /**
@@ -305,7 +334,7 @@ export const generateArrowPathLst = (path, interval = 5) => {
  * @param {object} params.MapConfigParams 地图配置参数
  * @param {object} params.mapContainer 地图容器
  * @param {object} params.scale 缩放比例（ref）
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
+ * @param {object} params.Map PixiMap 实例（提供 app.ticker 驱动箭头动画）
  * @param {Function} params.resetMap 重置地图的函数
  * @param {object} params.spriteState 精灵状态管理对象
  */
@@ -319,7 +348,9 @@ export async function drawRouterSprites({
   resetMap,
   spriteState,
 }) {
-  // 清空现有路由对象
+  // 清空现有路由对象（先停动画：否则 ticker 回调会操作已销毁的车辆精灵）
+  const animationController = getAnimationController(Map);
+  animationController?.stopAnimation();
   clearSprites(spriteState.routerObjs);
   resetMap?.();
 
@@ -381,9 +412,8 @@ export async function drawRouterSprites({
     mapContainer,
     scale,
     routerProps: props.router,
-    Map,
   });
 
-  // 启动箭头动画
-  startArrowAnimation(carSprite, arrowPathLst, Map);
+  // 启动箭头动画（按地图实例隔离的控制器驱动，走 app.ticker）
+  animationController?.startArrowAnimation(carSprite, arrowPathLst, Map);
 }

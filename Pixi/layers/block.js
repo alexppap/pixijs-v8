@@ -146,12 +146,16 @@ const drawBlockText = ({
   // 性能优化：如果文本和背景都不显示，直接返回
   if (!BlockLineShowText && !BlockLineShowBackground) return;
 
-  // 计算字体宽度
-  const textStr = JSON.stringify(text);
-  const textLength = getStringLength(textStr);
+  // 计算字体宽度（直接用 text：源实现传 JSON.stringify(text)，
+  // 多算两个引号使 textLength 偏大、字号偏小；layer.js 已修正，此处回流）
+  const textLength = typeof text === "string" ? getStringLength(text) : 0;
   const fontWidth = Math.min(
     DEFAULT_CONFIG.FONT_WIDTH_MAX,
-    Math.max(DEFAULT_CONFIG.FONT_WIDTH_MIN, Math.floor(8 / textLength))
+    Math.max(
+      DEFAULT_CONFIG.FONT_WIDTH_MIN,
+      // textLength 为 0 时 8/0 = Infinity，须显式兜底
+      textLength > 0 ? Math.floor(8 / textLength) : DEFAULT_CONFIG.FONT_WIDTH_MIN
+    )
   );
 
   // 创建文本元素

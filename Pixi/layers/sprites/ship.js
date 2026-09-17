@@ -86,7 +86,7 @@ const getBase64ImageUrl = (element) => {
  * @param {object} params.props 组件属性（projectMapLocationInfos/projectImgLst/Clickable）
  * @param {object} params.mapInfo 地图信息对象
  * @param {object} params.mapContainer 地图容器
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
+ * @param {object} params.Map PixiMap 实例（透传至 hover 效果，提供 app.ticker）
  * @param {Function} params.shipSpritesOnClick 船体点击事件处理函数
  * @param {Function} params.departmentSpritesOnClick 部门点击事件处理函数
  * @param {object} params.spriteState 精灵状态管理对象
@@ -345,8 +345,6 @@ const drawShipSpritesInternal = ({
       });
     }
   });
-
-  Map.render?.();
 };
 
 /**
@@ -471,8 +469,8 @@ const createAndAddShipPositionMarkers = ({
   mapContainer.addChild(staticContainer, combinedContainer);
 
   // 添加悬停效果。destroy 句柄挂到容器上，由 clearSprites 在销毁前调用：
-  // 否则 mouseover/mouseout 监听与运行中的 rAF 循环随容器销毁而悬空，
-  // 反复重绘船体会持续泄漏动画帧回调
+  // 否则 mouseover/mouseout 监听与挂在 ticker 上的跳动回调随容器销毁而悬空，
+  // 反复重绘船体会持续泄漏 ticker 回调
   combinedContainer.__hoverEffect = addSpriteHoverEffect({
     Map,
     parentContainer: mapContainer,
@@ -546,8 +544,9 @@ const setContainerInteraction = ({
 
 /**
  * 添加精灵悬停跳动效果（悬停置顶 + 沿自身角度方向正弦跳动）
+ * 动画由 app.ticker 驱动：常驻渲染下用 rAF + 手动 render 会每帧渲染两次
  * @param {object} params 参数对象
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
+ * @param {object} params.Map PixiMap 实例（提供 app.ticker）
  * @param {object} params.parentContainer 父容器（层级置顶用）
  * @param {object} params.sprite 目标精灵/容器
  * @param {object} params.state 交互状态（isDragging/isPinching）
@@ -567,7 +566,7 @@ function addSpriteHoverEffect({
     zIndexTop = SHIP_CONFIG.HOVER_EFFECT.Z_INDEX_TOP,
   } = options;
 
-  const render = () => Map?.render?.();
+  const ticker = Map?.app?.ticker ?? null;
 
   // 保存初始状态（含初始角度，确保旋转后跳动方向一致）
   const initialState = {
@@ -579,8 +578,9 @@ function addSpriteHoverEffect({
   };
 
   let isHovering = false;
-  let isJumping = false;
-  let animationFrame = null;
+  /** 挂在 ticker 上的跳动回调（null 表示未运行） */
+  let tickFn = null;
+  let currentFrame = 0;
   const frameCount = Math.floor(jumpDuration / (1000 / 60));
 
   sprite.eventMode = "static";
@@ -602,48 +602,55 @@ function addSpriteHoverEffect({
     return { offsetX, offsetY };
   }
 
-  function startJumpLoop() {
-    // 双重保险：取消旧动画帧
-    if (animationFrame) {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = null;
+  /**
+   * 从 ticker 摘除跳动回调
+   */
+  function stopJumpLoop() {
+    if (tickFn && ticker) {
+      ticker.remove(tickFn);
     }
+    tickFn = null;
+  }
+
+  /**
+   * 恢复精灵到初始位置（销毁后不再触碰）
+   */
+  function restorePosition() {
+    if (!sprite.destroyed) {
+      sprite.x = initialState.x;
+      sprite.y = initialState.y;
+    }
+  }
+
+  function startJumpLoop() {
+    // 双重保险：摘除旧回调
+    stopJumpLoop();
 
     if (
       !isHovering ||
       state.isDragging ||
       state.isPinching ||
-      sprite.destroyed
+      sprite.destroyed ||
+      !ticker
     ) {
-      isJumping = false;
       // 恢复初始位置（x和y都要恢复，因为斜向跳动修改了x）
-      if (!sprite.destroyed) {
-        sprite.x = initialState.x;
-        sprite.y = initialState.y;
-        render();
-      }
+      restorePosition();
       return;
     }
 
-    isJumping = true;
-    let currentFrame = 0;
+    currentFrame = 0;
 
-    function animateSingleJump() {
+    tickFn = () => {
       // 中途状态变化，或精灵已销毁（clearSprites 销毁前会移除监听，
-      // mouseout 不再触发、isHovering 恒为 true），立即停止避免 rAF 泄漏
+      // mouseout 不再触发、isHovering 恒为 true），立即停止避免回调泄漏
       if (
         !isHovering ||
         state.isDragging ||
         state.isPinching ||
         sprite.destroyed
       ) {
-        isJumping = false;
-        cancelAnimationFrame(animationFrame);
-        if (!sprite.destroyed) {
-          sprite.x = initialState.x;
-          sprite.y = initialState.y;
-          render();
-        }
+        stopJumpLoop();
+        restorePosition();
         return;
       }
 
@@ -656,65 +663,46 @@ function addSpriteHoverEffect({
       // 更新Sprite位置（基于初始位置+偏移量，避免累积误差）
       sprite.x = initialState.x + offsetX;
       sprite.y = initialState.y + offsetY;
+    };
 
-      render();
-
-      // 循环跳动
-      animationFrame = requestAnimationFrame(animateSingleJump);
-    }
-
-    animateSingleJump();
+    ticker.add(tickFn);
   }
 
   sprite.on("mouseover", () => {
     if (state.isDragging || state.isPinching) return;
 
     isHovering = true;
-    isJumping = false; // 重置状态
 
     // 层级置顶
     parentContainer.sortableChildren = true;
     sprite.zIndex = zIndexTop;
-    render();
 
-    if (!isJumping) {
-      startJumpLoop();
-    }
+    startJumpLoop();
   });
 
   sprite.on("mouseout", () => {
     isHovering = false;
-    isJumping = false; // 重置状态
-
-    if (animationFrame) {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = null;
-    }
+    stopJumpLoop();
 
     // 恢复初始位置和层级
     if (!state.isDragging && !state.isPinching) {
-      sprite.x = initialState.x;
-      sprite.y = initialState.y;
+      restorePosition();
       sprite.zIndex = initialState.zIndex;
-      render();
     }
   });
 
   return {
     destroy: () => {
       isHovering = false;
-      isJumping = false;
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
+      stopJumpLoop();
       sprite.removeAllListeners("mouseover");
       sprite.removeAllListeners("mouseout");
       // 恢复所有初始状态
-      sprite.x = initialState.x;
-      sprite.y = initialState.y;
-      sprite.zIndex = initialState.zIndex;
-      sprite.eventMode = initialState.eventMode;
-      render();
+      restorePosition();
+      if (!sprite.destroyed) {
+        sprite.zIndex = initialState.zIndex;
+        sprite.eventMode = initialState.eventMode;
+      }
     },
   };
 }

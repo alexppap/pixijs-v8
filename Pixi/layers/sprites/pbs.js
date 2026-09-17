@@ -225,7 +225,7 @@ const createPBS = ({
  * @param {object} params 参数对象
  * @param {object} params.props 组件属性（NowPBSs/showLightPBSs/Clickable 等）
  * @param {object} params.mapContainer 地图容器
- * @param {object} params.Map PixiMap 实例（render 触发渲染）
+ * @param {object} params.Map PixiMap 实例（网格纹理渲染用）
  * @param {object} params.ConfigParams 配置参数（PBSBoarder）
  * @param {object} params.mapInfo 地图信息对象
  * @param {Function} params.PBSOnClick PBS点击事件处理函数
@@ -286,7 +286,4 @@ export function drawPBSs({
         PBSOnClick(it);
       }
     });
-
-  // 初始化渲染
-  Map.render?.();
 }

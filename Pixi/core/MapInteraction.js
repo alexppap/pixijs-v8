@@ -13,7 +13,17 @@
  *              ② onInteractionStart 回调（源码 mousedown/wheel/touchmove 处
  *                 调用 closeDialogsAndCleanup 的对应注入点）；
  *              ③ 触摸拖拽与鼠标一致：超过阈值才触发 onDrag。
- * Version: 1.3.0
+ *              2026-08-25 重构（P1-4）：mouse + touch 两套监听统一为
+ *              Pointer Events（pointerdown/move/up/cancel），单指拖拽与鼠标
+ *              拖拽走同一条路径，双指捏合按活跃指针表计算。同时修正两个缺陷：
+ *              ① 只有主键（button === 0）触发拖拽，右键/中键不再拖动地图；
+ *              ② 用 setPointerCapture 承接后续事件，拖到画布外不再中断。
+ *              行为收敛：源码 mouse 路径在 mousedown 触发 onInteractionStart，
+ *              touch 路径却延到 touchmove；统一后触摸单指拖拽也在按下时触发
+ *              （与鼠标一致，弹窗关得更早）。捏合仍在 move 时持续触发。
+ *              注：canvas 需 touch-action: none，否则浏览器原生手势会吞掉
+ *              pointermove（替代源码 touchmove 里的 preventDefault）。
+ * Version: 2.0.0
  */
 import { calculateScaleTransform } from "../utils/scaleTransform";
 
@@ -30,7 +40,7 @@ const DEFAULT_OPTIONS = {
   hullZoomDelta: 0.3, // 船体(isHull)模式滚轮缩放步长
   isHull: null, // 船体模式判断函数 () => boolean（如 () => props.isHull）
   dragThreshold: 5, // 拖拽触发阈值(像素)
-  onInteractionStart: null, // 交互开始/进行回调（mousedown/wheel/touchmove，对应源码关闭弹窗时机）
+  onInteractionStart: null, // 交互开始/进行回调（pointerdown/wheel/捏合，对应源码关闭弹窗时机）
   onScaleChange: null, // 缩放变化回调 (newScale, newPosition) => void
   onDrag: null, // 拖拽回调 (x, y) => void（超过阈值才触发）
 };
@@ -51,9 +61,17 @@ export function createMapInteraction(pixiMap, options = {}) {
   const canvas = pixiMap.view;
   const container = pixiMap.mapContainer; // 拖拽/缩放作用于地图场景容器
 
+  /**
+   * 活跃指针表：pointerId → 最近一次 client 坐标。
+   * 1 个 → 拖拽；2 个 → 捏合缩放（触屏/触控板均走此路径）
+   * @type {Map<number, {x: number, y: number}>}
+   */
+  const activePointers = new Map();
+
   // 交互状态（对齐 v6 interactionState 结构）
   const state = {
     isDragging: false, // 是否处于拖拽中
+    dragPointerId: null, // 承担拖拽的指针 ID（多指时只认第一根）
     dragStart: { x: 0, y: 0 }, // 拖拽起点（clientX/Y）
     containerStart: { x: 0, y: 0 }, // 拖拽开始时容器位置
     isPinching: false, // 是否处于双指捏合中
@@ -72,8 +90,8 @@ export function createMapInteraction(pixiMap, options = {}) {
   // ------------------------------
   /**
    * 获取事件相对画布的本地坐标（逻辑像素，与 app.screen 一致）
-   * @param {Number} clientX - 鼠标/触摸 clientX
-   * @param {Number} clientY - 鼠标/触摸 clientY
+   * @param {Number} clientX - 指针 clientX
+   * @param {Number} clientY - 指针 clientY
    * @returns {Object} { x, y }
    */
   const getLocalPoint = (clientX, clientY) => {
@@ -98,51 +116,129 @@ export function createMapInteraction(pixiMap, options = {}) {
     config.onScaleChange?.(newScale, newPosition);
   };
 
+  /**
+   * 把缩放比例限制在配置范围内
+   * @param {Number} value - 目标缩放
+   * @returns {Number} 限制后的缩放
+   */
+  const clampScale = (value) =>
+    Math.max(config.minScale, Math.min(config.maxScale, value));
+
+  /**
+   * 取当前两根活跃指针（不足两根返回 null）
+   * @returns {Array<{x: number, y: number}>|null} 两个指针坐标
+   */
+  const getTwoPointers = () => {
+    if (activePointers.size < 2) return null;
+    const [p1, p2] = [...activePointers.values()];
+    return [p1, p2];
+  };
+
   // ------------------------------
-  // 鼠标事件处理
+  // 指针事件处理（鼠标 / 触摸 / 触控笔统一）
   // ------------------------------
   /**
-   * 鼠标按下处理
-   * @param {MouseEvent} event - 鼠标事件
+   * 指针按下：单指进入拖拽，第二指切入捏合
+   * @param {PointerEvent} event - 指针事件
    */
-  const handleMouseDown = (event) => {
-    state.isDragging = true;
-    state.dragStart = { x: event.clientX, y: event.clientY };
-    state.containerStart = { x: container.x, y: container.y };
-    // 对齐源码：mousedown 时触发交互开始回调（关闭弹窗等）
-    config.onInteractionStart?.();
+  const handlePointerDown = (event) => {
+    // 只有主键（左键/单指触摸/笔尖）拖拽；右键、中键不参与
+    if (event.button !== 0) return;
+
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    // 捕获该指针：后续 move/up 即便移出画布也仍派发到 canvas，
+    // 修复"拖到画布外拖拽中断"（源实现把 mousemove/up 绑在 canvas 上）
+    canvas.setPointerCapture?.(event.pointerId);
+
+    if (activePointers.size === 1) {
+      state.isDragging = true;
+      state.dragPointerId = event.pointerId;
+      state.dragStart = { x: event.clientX, y: event.clientY };
+      state.containerStart = { x: container.x, y: container.y };
+      // 对齐源码：按下时触发交互开始回调（关闭弹窗等）
+      config.onInteractionStart?.();
+    } else if (activePointers.size === 2) {
+      // 第二根手指落下：从拖拽切换到捏合
+      state.isPinching = true;
+      state.isDragging = false;
+      state.dragPointerId = null;
+      const pair = getTwoPointers();
+      state.initialDistance = Math.hypot(
+        pair[0].x - pair[1].x,
+        pair[0].y - pair[1].y
+      );
+    }
   };
 
   /**
-   * 鼠标移动处理（拖拽平移）
-   * @param {MouseEvent} event - 鼠标事件
+   * 指针移动：单指拖拽平移 / 双指捏合缩放
+   * @param {PointerEvent} event - 指针事件
    */
-  const handleMouseMove = (event) => {
-    if (!state.isDragging) return;
+  const handlePointerMove = (event) => {
+    // 未登记的指针（如未按下的鼠标移动）不处理
+    if (!activePointers.has(event.pointerId)) return;
+
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    // 双指捏合缩放
+    if (state.isPinching) {
+      handlePinchZoom();
+      return;
+    }
+
+    // 单指/鼠标拖拽平移
+    if (!state.isDragging || event.pointerId !== state.dragPointerId) return;
 
     const deltaX = event.clientX - state.dragStart.x;
     const deltaY = event.clientY - state.dragStart.y;
-
-    // 超过拖拽阈值才视为有效拖拽
-    const beyondThreshold =
-      Math.abs(deltaX) > config.dragThreshold ||
-      Math.abs(deltaY) > config.dragThreshold;
 
     // 更新容器位置
     const newX = state.containerStart.x + deltaX;
     const newY = state.containerStart.y + deltaY;
     container.position.set(newX, newY);
 
+    // 超过拖拽阈值才视为有效拖拽
+    const beyondThreshold =
+      Math.abs(deltaX) > config.dragThreshold ||
+      Math.abs(deltaY) > config.dragThreshold;
     if (beyondThreshold) {
       config.onDrag?.(newX, newY);
     }
   };
 
   /**
-   * 结束拖拽状态
+   * 指针抬起/取消：移出指针表，必要时结束拖拽或捏合
+   * @param {PointerEvent} event - 指针事件
    */
-  const endDrag = () => {
-    state.isDragging = false;
+  const handlePointerUp = (event) => {
+    activePointers.delete(event.pointerId);
+    // 必须先查 hasPointerCapture：捕获已释放时 releasePointerCapture 会抛
+    // NotFoundError。lostpointercapture 也走本处理器，那时捕获正是已释放状态
+    if (canvas.hasPointerCapture?.(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+
+    if (activePointers.size < 2) {
+      state.isPinching = false;
+      state.initialDistance = 0;
+    }
+
+    if (activePointers.size === 0) {
+      state.isDragging = false;
+      state.dragPointerId = null;
+      return;
+    }
+
+    // 捏合中抬起一根手指：剩下那根接续拖拽（避免地图"卡住"）
+    if (activePointers.size === 1) {
+      const [id] = [...activePointers.keys()];
+      const point = activePointers.get(id);
+      state.isDragging = true;
+      state.dragPointerId = id;
+      state.dragStart = { x: point.x, y: point.y };
+      state.containerStart = { x: container.x, y: container.y };
+    }
   };
 
   /**
@@ -163,115 +259,41 @@ export function createMapInteraction(pixiMap, options = {}) {
 
     // 更新缩放并限制范围
     const curScale = currentScale();
-    const newScale = Math.max(
-      config.minScale,
-      Math.min(config.maxScale, curScale + delta)
-    );
+    const newScale = clampScale(curScale + delta);
     if (newScale === curScale) return;
 
     applyScale(newScale, getLocalPoint(event.clientX, event.clientY));
   };
 
-  // ------------------------------
-  // 触摸事件处理
-  // ------------------------------
   /**
-   * 触摸开始处理
-   * @param {TouchEvent} event - 触摸事件
+   * 双指捏合缩放处理（按活跃指针表实时距离比例缩放）
    */
-  const handleTouchStart = (event) => {
-    if (event.touches.length === 1) {
-      state.isDragging = true;
-      state.dragStart = {
-        x: event.touches[0].clientX,
-        y: event.touches[0].clientY,
-      };
-      state.containerStart = { x: container.x, y: container.y };
-    } else if (event.touches.length === 2) {
-      state.isPinching = true;
-      state.isDragging = false;
-      const [t1, t2] = event.touches;
-      state.initialDistance = Math.hypot(
-        t1.clientX - t2.clientX,
-        t1.clientY - t2.clientY
-      );
-    }
-  };
+  const handlePinchZoom = () => {
+    const pair = getTwoPointers();
+    if (!pair) return;
 
-  /**
-   * 触摸移动处理（单指拖拽 / 双指捏合缩放）
-   * @param {TouchEvent} event - 触摸事件
-   */
-  const handleTouchMove = (event) => {
-    event.preventDefault();
+    // 捏合进行中回调（关闭弹窗等，对齐源码 touchmove 时机）
+    config.onInteractionStart?.();
 
-    // 触摸移动（拖拽/捏合）时回调（关闭弹窗等）
-    if (state.isDragging || state.isPinching) {
-      config.onInteractionStart?.();
-    }
-
-    // 单指拖动
-    if (state.isDragging && event.touches.length === 1) {
-      const deltaX = event.touches[0].clientX - state.dragStart.x;
-      const deltaY = event.touches[0].clientY - state.dragStart.y;
-
-      // 更新容器位置
-      const newX = state.containerStart.x + deltaX;
-      const newY = state.containerStart.y + deltaY;
-      container.position.set(newX, newY);
-
-      // 超过拖拽阈值才触发回调
-      const beyondThreshold =
-        Math.abs(deltaX) > config.dragThreshold ||
-        Math.abs(deltaY) > config.dragThreshold;
-      if (beyondThreshold) {
-        config.onDrag?.(newX, newY);
-      }
-    }
-
-    // 双指缩放
-    if (state.isPinching && event.touches.length === 2) {
-      handlePinchZoom(event);
-    }
-  };
-
-  /**
-   * 触摸结束处理
-   */
-  const handleTouchEnd = () => {
-    state.isDragging = false;
-    state.isPinching = false;
-    state.initialDistance = 0;
-  };
-
-  /**
-   * 双指捏合缩放处理
-   * @param {TouchEvent} event - 触摸事件
-   */
-  const handlePinchZoom = (event) => {
-    const [t1, t2] = event.touches;
     const currentDistance = Math.hypot(
-      t1.clientX - t2.clientX,
-      t1.clientY - t2.clientY
+      pair[0].x - pair[1].x,
+      pair[0].y - pair[1].y
     );
 
     if (state.initialDistance > 0) {
       // 计算中心点
       const centerPos = getLocalPoint(
-        (t1.clientX + t2.clientX) / 2,
-        (t1.clientY + t2.clientY) / 2
+        (pair[0].x + pair[1].x) / 2,
+        (pair[0].y + pair[1].y) / 2
       );
 
       // 更新缩放并限制范围（比例式缩放）
-      const newScale = Math.max(
-        config.minScale,
-        Math.min(
-          config.maxScale,
-          currentScale() * (currentDistance / state.initialDistance)
-        )
+      const curScale = currentScale();
+      const newScale = clampScale(
+        curScale * (currentDistance / state.initialDistance)
       );
 
-      if (newScale !== currentScale()) {
+      if (newScale !== curScale) {
         applyScale(newScale, centerPos);
       }
     }
@@ -282,16 +304,20 @@ export function createMapInteraction(pixiMap, options = {}) {
   // ------------------------------
   // 事件绑定与解绑
   // ------------------------------
+  // touch-action: none —— 交由 Pointer Events 处理手势，
+  // 否则浏览器原生滚动/双击缩放会吞掉 pointermove
+  const previousTouchAction = canvas.style.touchAction;
+  canvas.style.touchAction = "none";
+
   const listeners = [
-    ["mousedown", handleMouseDown],
-    ["mousemove", handleMouseMove],
-    ["mouseup", endDrag],
-    ["mouseleave", endDrag],
+    ["pointerdown", handlePointerDown],
+    ["pointermove", handlePointerMove],
+    ["pointerup", handlePointerUp],
+    ["pointercancel", handlePointerUp],
+    // 指针捕获下 pointerleave 不该结束拖拽（拖出画布仍继续），
+    // 但捕获不可用时（旧浏览器）仍需兜底
+    ["lostpointercapture", handlePointerUp],
     ["wheel", handleWheel, { passive: false }],
-    ["touchstart", handleTouchStart, { passive: false }],
-    ["touchmove", handleTouchMove, { passive: false }],
-    ["touchend", handleTouchEnd, { passive: false }],
-    ["touchcancel", handleTouchEnd, { passive: false }],
   ];
 
   listeners.forEach(([type, handler, opts]) => {
@@ -306,13 +332,28 @@ export function createMapInteraction(pixiMap, options = {}) {
       return currentScale();
     },
     /**
+     * 只读交互状态（供 ship.js hover 效果等消费方判断"拖拽/捏合中不跳动"，
+     * 免去调用方自行维护一份同名状态）
+     */
+    interactionState: {
+      get isDragging() {
+        return state.isDragging;
+      },
+      get isPinching() {
+        return state.isPinching;
+      },
+    },
+    /**
      * 移除所有交互事件监听，释放资源
      */
     destroy() {
       listeners.forEach(([type, handler, opts]) => {
         canvas.removeEventListener(type, handler, opts);
       });
+      canvas.style.touchAction = previousTouchAction;
+      activePointers.clear();
       state.isDragging = false;
+      state.dragPointerId = null;
       state.isPinching = false;
       state.initialDistance = 0;
     },

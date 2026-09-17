@@ -117,10 +117,8 @@ describe("destroy 销毁链", () => {
 describe("dialogState", () => {
   it("closeDialog 隐藏边框、重置类型、清空点击项并触发回调", () => {
     const onChangeShowTransitRecords = vi.fn();
-    const onRender = vi.fn();
     const state = createDialogState({
       onChangeShowTransitRecords,
-      onRender,
     });
 
     const border = { visible: true };
@@ -136,7 +134,6 @@ describe("dialogState", () => {
     expect(state.clickEventType.value).toBe("");
     expect(state.DialogData.ClickedMapItems.length).toBe(0);
     expect(onChangeShowTransitRecords).toHaveBeenCalledTimes(1);
-    expect(onRender).toHaveBeenCalledTimes(1);
   });
 
   it("弹窗未显示时 closeDialog 不触发回调", () => {

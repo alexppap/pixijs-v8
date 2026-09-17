@@ -6,10 +6,11 @@
  *              的 DialogData reactive 对象（449–478 行）移植，实例间隔离。
  *              差异：源码 closeDialog 内的 emit("changeShowTransitRecords")、
  *              Map.render?.() 与 ClickedMapItemBorder/clickEventType 闭包引用
- *              改为工厂内聚 + 回调注入（onClose/onRender 由装配层提供）。
+ *              改为工厂内聚 + 回调注入（onClose 由装配层提供）；render 注入点
+ *              已删除——常驻渲染下 ticker 每帧出图，关弹窗无需补渲。
  *              高亮边框引用不做单独销毁（对齐源码：销毁统一在
  *              itemBorderLst 中处理，见 MapTemplate 清理链注释）。
- * Version: 1.0.0
+ * Version: 1.1.0
  */
 import { reactive, ref } from "vue";
 
@@ -17,13 +18,11 @@ import { reactive, ref } from "vue";
  * 创建弹窗状态实例
  * @param {object} callbacks 回调注入
  * @param {Function} [callbacks.onChangeShowTransitRecords] 关闭弹窗时通知
- * @param {Function} [callbacks.onRender] 关闭弹窗后触发渲染（常驻渲染下冗余，
- *                                        保留以兼容按需渲染模式）
  * @returns {object} { DialogData, clickEventType, setClickedMapItemBorder,
  *                     clearClickedMapItemBorder, destroy }
  */
 export function createDialogState(callbacks = {}) {
-  const { onChangeShowTransitRecords, onRender } = callbacks;
+  const { onChangeShowTransitRecords } = callbacks;
 
   /** 高亮边框引用（createHighlightBorder 设置，closeDialog 隐藏） */
   let clickedMapItemBorder = null;
@@ -57,7 +56,6 @@ export function createDialogState(callbacks = {}) {
         clickEventType.value = "";
         DialogData.ClickedMapItems = [];
         onChangeShowTransitRecords?.();
-        onRender?.();
       }
     },
   });

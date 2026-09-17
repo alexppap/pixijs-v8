@@ -438,6 +438,9 @@ export function calculateBounds(points, options = {}) {
 
 /**
  * 处理多边形顶点去重和转换（世界坐标 → 以中心为原点的局部坐标）
+ * 注：与 layers/layer.js 内的同名局部函数职责不同——本函数输出**局部**
+ * 坐标（减中心、Y 取反）；layer.js 那个输出世界坐标并额外收集边界数组。
+ * 两者不可互换，命名重合仅为移植遗留。
  * @param {object[]} points 多边形顶点数组（{X, Y} 格式）
  * @param {number} centerX 中心点X坐标
  * @param {number} centerY 中心点Y坐标
@@ -447,8 +450,10 @@ export function processPolygonVertices(points, centerX, centerY) {
   const polygonVertices = [];
 
   points.forEach((point, i) => {
-    // 去重操作
-    if (i === 0 || JSON.stringify(point) !== JSON.stringify(points[i - 1])) {
+    // 与上一点去重：直接比较坐标。原实现逐点两次 JSON.stringify，
+    // 既慢又对属性顺序/无关字段敏感（同坐标可能被判为不同点）
+    const prev = points[i - 1];
+    if (i === 0 || point.X !== prev.X || point.Y !== prev.Y) {
       polygonVertices.push(point.X - centerX);
       polygonVertices.push(-(point.Y - centerY));
     }

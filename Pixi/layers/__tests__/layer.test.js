@@ -325,6 +325,23 @@ describe("recolor（watch colorList 重绘）", () => {
     ).not.toThrow();
   });
 
+  it("colorList 带 FieldID 时按 FieldID 匹配（顺序无关）", () => {
+    const fillSpy = vi.spyOn(Graphics.prototype, "fill");
+
+    // 先放一个匹配不上的颜色项，确认不是靠下标 0 命中的
+    const result = recolor(state, [
+      { FieldID: "NOT_EXIST", fillColor: "rgba(0,255,0,1)" },
+      { FieldID: "F1", fillColor: "rgba(255,0,0,1)" },
+    ]);
+
+    expect(result).toBe(true);
+    expect(fillSpy).toHaveBeenCalledWith({ color: 0xff0000, alpha: 1 });
+    expect(fillSpy).not.toHaveBeenCalledWith({ color: 0x00ff00, alpha: 1 });
+    expect(state.fieldTextLst[0].style.fill).toBe("rgba(255, 255, 255, 1)");
+
+    fillSpy.mockRestore();
+  });
+
   it("空颜色列表不重绘", () => {
     expect(recolor(state, [])).toBe(false);
     expect(recolor(state, null)).toBe(false);

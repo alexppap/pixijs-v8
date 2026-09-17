@@ -41,7 +41,6 @@ const buildDeps = () => ({
   originScale: { value: 2 },
   scale: { value: 1 },
   DialogData: DIALOG_DATA,
-  Map: { render: vi.fn() },
   props: { ShouldDrawCamera: true, Clickable: false },
   cameraLstState: createCameraLstState(),
 });
@@ -62,7 +61,6 @@ describe("drawCamera", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
     });
@@ -79,7 +77,6 @@ describe("drawCamera", () => {
     expect(sprite.RefObjectID).toBe("cam-1");
     expect(sprite.Name).toBe("CAM-01");
     expect(deps.mapContainer.children).toContain(sprite);
-    expect(deps.Map.render).toHaveBeenCalled();
   });
 
   it("纹理未加载时先 await loadAllTextures 再绘制", async () => {
@@ -93,7 +90,6 @@ describe("drawCamera", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
     });
@@ -112,7 +108,6 @@ describe("drawCamera", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
     });
@@ -125,7 +120,6 @@ describe("drawCamera", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: { ...deps.props, ShouldDrawCamera: false },
       cameraLstState: deps.cameraLstState,
     });
@@ -143,13 +137,13 @@ describe("drawCamera", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
     });
 
     expect(deps.cameraLstState.CameraLstPIXI.length).toBe(0);
-    expect(deps.Map.render).not.toHaveBeenCalled();
+    // 提前返回：容器内不应挂载任何摄像头精灵
+    expect(deps.mapContainer.children.length).toBe(0);
   });
 
   it("从 LayerInfos 提取 Type=Camera 元素绘制", async () => {
@@ -177,7 +171,6 @@ describe("drawCamera", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
     });
@@ -198,7 +191,6 @@ describe("drawCamera 点击弹窗", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
     });
@@ -233,7 +225,6 @@ describe("drawCamera 点击弹窗", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
       deps: injected,
@@ -274,7 +265,6 @@ describe("drawCamera 点击弹窗", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
       deps: { queryCameraViewUrl: vi.fn().mockResolvedValue(null) },
@@ -302,7 +292,6 @@ describe("drawCamera 点击弹窗", () => {
       originScale: deps.originScale,
       scale: deps.scale,
       DialogData: deps.DialogData,
-      Map: deps.Map,
       props: deps.props,
       cameraLstState: deps.cameraLstState,
       deps: { queryCameraViewUrl, initVideo },

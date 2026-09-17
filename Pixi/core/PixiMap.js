@@ -47,8 +47,11 @@ class PixiMap {
       height: this.options.height || 100,
       background: this.options.backgroundColor ?? 0x062947,
       antialias: this.options.antialias ?? true,
+      // 常驻渲染：ticker 每帧自动渲染，全库不再手动调用 render()
       autoStart: true,
-      resolution: 2,
+      // 跟随显示器 DPR，上限 2：DPR=1 的屏幕不白付 4 倍像素填充，
+      // DPR=3 的移动端也不因固定 2 而模糊
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true, // canvas 的 CSS 尺寸自动保持逻辑像素，resize/交互坐标不受影响
     });
     containerEl.appendChild(this.app.canvas);
@@ -177,7 +180,10 @@ class PixiMap {
   }
 
   /**
-   * 手动渲染一帧（应用以 autoStart: false 创建，需手动驱动渲染）
+   * 强制同步渲染一帧。
+   * 应用以 autoStart: true 创建（常驻渲染），ticker 每帧自动渲染，
+   * 因此业务代码无需调用本方法——状态改完等下一帧即可。
+   * 仅在需要"此刻画面已落到 GPU"的同步场景使用（如 exportAsPNG 前）。
    */
   render() {
     if (!this.app) return;
@@ -206,7 +212,8 @@ class PixiMap {
     }
 
     try {
-      // 强制触发一次渲染，确保导出内容为最新帧（常驻渲染下冗余但无害）
+      // 强制渲染一帧，确保导出内容包含本轮所有状态变更
+      // （常驻渲染每帧自动出图，但 extract 是同步调用，需先落帧）
       this.app.render();
 
       // 使用 canvas 提取方式，兼容性更好

@@ -57,8 +57,8 @@ export function createSpriteState() {
       Object.values(state).forEach((arr) => {
         if (Array.isArray(arr) && arr.length) {
           arr.forEach((item) => {
-            // 停悬停效果（取消 rAF + 摘监听），与 clearSprites 一致；
-            // 否则动画帧回调会在对象销毁后继续访问已销毁对象
+            // 停悬停效果（摘除 ticker 回调 + 监听），与 clearSprites 一致；
+            // 否则动画回调会在对象销毁后继续访问已销毁对象
             if (typeof item?.__hoverEffect?.destroy === "function") {
               try {
                 item.__hoverEffect.destroy();
